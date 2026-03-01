@@ -68,8 +68,9 @@ export function walkToTarget(
   targetCol: number,
   targetRow: number,
   grid: GridTile[][],
+  blocked: Set<string> = new Set(),
 ): void {
-  const path = findPath(ch.col, ch.row, targetCol, targetRow, grid)
+  const path = findPath(ch.col, ch.row, targetCol, targetRow, grid, blocked)
   if (path.length > 0) {
     ch.path = path
     ch.moveProgress = 0

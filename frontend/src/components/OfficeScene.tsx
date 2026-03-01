@@ -18,8 +18,10 @@ import {
   DASH_WALK_ROW,
   COLS,
   ROWS,
+  DECO_TILE_SIZE,
 } from '../scene/worldState'
-import type { WorldState } from '../scene/types'
+import type { WorldState, SelectedObject } from '../scene/types'
+import { hitTest, cssToLogical } from '../scene/collision'
 
 export type WalkTarget = 'board' | 'dashboard' | 'home'
 
@@ -29,14 +31,25 @@ export interface OfficeSceneHandle {
   walkToTile: (agentId: string, col: number, row: number) => void
 }
 
+export interface OfficeSceneProps {
+  onSelect?: (obj: SelectedObject | null) => void
+}
+
 // Canvas includes transparent padding so characters near the edges aren't clipped
 const CANVAS_W = (COLS + SCENE_PAD_L + SCENE_PAD_R) * TILE_SIZE  // 33 tiles wide
 const CANVAS_H = (ROWS + SCENE_PAD_T + SCENE_PAD_B) * TILE_SIZE  // 14 tiles tall
 
-export const OfficeScene = forwardRef<OfficeSceneHandle>((_, ref) => {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const worldRef   = useRef<WorldState>(createWorldState())
-  const spritesRef = useRef<Sprites | null>(null)
+// Canvas is displayed at this fraction of its logical size
+const CSS_SCALE = 0.64
+
+export const OfficeScene = forwardRef<OfficeSceneHandle, OfficeSceneProps>(({ onSelect }, ref) => {
+  const canvasRef    = useRef<HTMLCanvasElement>(null)
+  const worldRef     = useRef<WorldState>(createWorldState())
+  const spritesRef   = useRef<Sprites | null>(null)
+  const selectedRef    = useRef<SelectedObject | null>(null)
+  const pendingTileRef = useRef<{ col: number; row: number } | null>(null)
+  const onSelectRef    = useRef(onSelect)
+  onSelectRef.current  = onSelect
 
   const walkAgent = useCallback((agentId: string, target: WalkTarget) => {
     const ch = worldRef.current.characters.get(agentId)
@@ -49,7 +62,7 @@ export const OfficeScene = forwardRef<OfficeSceneHandle>((_, ref) => {
     } else {
       col = ch.homeCol; row = ch.homeRow
     }
-    walkToTarget(ch, col, row, worldRef.current.grid)
+    walkToTarget(ch, col, row, worldRef.current.grid, worldRef.current.blockedTiles)
   }, [])
 
   const setStatusEmoji = useCallback((agentId: string, emoji: string) => {
@@ -62,7 +75,7 @@ export const OfficeScene = forwardRef<OfficeSceneHandle>((_, ref) => {
     if (!ch) return
     const clampedCol = Math.max(0, Math.min(COLS - 1, col))
     const clampedRow = Math.max(0, Math.min(ROWS - 1, row))
-    walkToTarget(ch, clampedCol, clampedRow, worldRef.current.grid)
+    walkToTarget(ch, clampedCol, clampedRow, worldRef.current.grid, worldRef.current.blockedTiles)
   }, [])
 
   useImperativeHandle(ref, () => ({ walkAgent, setStatusEmoji, walkToTile }), [
@@ -90,18 +103,102 @@ export const OfficeScene = forwardRef<OfficeSceneHandle>((_, ref) => {
           updateCharacter(ch, dt)
         }
       },
-      render: (ctx, cvs) => render(ctx, cvs, worldRef.current, spritesRef.current),
+      render: (ctx, cvs) => render(ctx, cvs, worldRef.current, spritesRef.current, selectedRef.current, pendingTileRef.current),
     })
 
-    return stop
+    // ── Mouse interaction ────────────────────────────────────────────────────
+    // CSS scale: canvas is shown at CSS_SCALE of its logical width/height.
+    // Mouse coords from the browser are in CSS px; divide by CSS_SCALE to get
+    // the logical-pixel coordinate used by the renderer.
+    const OX = SCENE_PAD_L * TILE_SIZE
+    const OY = SCENE_PAD_T * TILE_SIZE
+
+    /** Convert logical pixel coords to grid (col, row), or null if outside grid */
+    const toGridTile = (lx: number, ly: number): { col: number; row: number } | null => {
+      const col = Math.floor((lx - OX) / TILE_SIZE)
+      const row = Math.floor((ly - OY) / TILE_SIZE)
+      if (col < 0 || col >= COLS || row < 0 || row >= ROWS) return null
+      return { col, row }
+    }
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const rect = canvas.getBoundingClientRect()
+      const cssX = e.clientX - rect.left
+      const cssY = e.clientY - rect.top
+      const { x, y } = cssToLogical(cssX, cssY, CSS_SCALE)
+      const hit = hitTest(x, y, worldRef.current, DECO_TILE_SIZE)
+
+      if (hit) {
+        canvas.style.cursor = 'pointer'
+      } else if (selectedRef.current?.kind === 'character' && toGridTile(x, y)) {
+        // Character selected + hovering over a valid floor tile → move cursor
+        canvas.style.cursor = 'crosshair'
+      } else {
+        canvas.style.cursor = 'default'
+      }
+    }
+
+    const handleClick = (e: MouseEvent) => {
+      const rect = canvas.getBoundingClientRect()
+      const cssX = e.clientX - rect.left
+      const cssY = e.clientY - rect.top
+      const { x, y } = cssToLogical(cssX, cssY, CSS_SCALE)
+      const hit = hitTest(x, y, worldRef.current, DECO_TILE_SIZE)
+
+      // Character selected + clicking empty floor → two-step confirm
+      if (!hit && selectedRef.current?.kind === 'character') {
+        const tile = toGridTile(x, y)
+        if (tile) {
+          const pending = pendingTileRef.current
+          if (pending && pending.col === tile.col && pending.row === tile.row) {
+            // Second click on the same tile → confirm, walk there
+            const ch = worldRef.current.characters.get(selectedRef.current.id)
+            if (ch) {
+              walkToTarget(ch, tile.col, tile.row, worldRef.current.grid, worldRef.current.blockedTiles)
+            }
+            pendingTileRef.current = null
+          } else {
+            // First click (or different tile) → set pending target
+            pendingTileRef.current = tile
+          }
+        }
+        return
+      }
+
+      // Clicking an object clears any pending tile
+      pendingTileRef.current = null
+
+      // Toggle deselect if clicking the same object twice
+      if (
+        hit &&
+        selectedRef.current &&
+        hit.kind === selectedRef.current.kind &&
+        (hit.kind !== 'character' || (hit as { id: string }).id === (selectedRef.current as { id: string }).id) &&
+        (hit.kind !== 'decoration' || (hit as { index: number }).index === (selectedRef.current as { index: number }).index)
+      ) {
+        selectedRef.current = null
+      } else {
+        selectedRef.current = hit
+      }
+      onSelectRef.current?.(selectedRef.current)
+    }
+
+    canvas.addEventListener('mousemove', handleMouseMove)
+    canvas.addEventListener('click', handleClick)
+
+    return () => {
+      stop()
+      canvas.removeEventListener('mousemove', handleMouseMove)
+      canvas.removeEventListener('click', handleClick)
+    }
   }, [])
 
   return (
     <canvas
       ref={canvasRef}
       style={{
-        width:  CANVAS_W * 0.64,
-        height: CANVAS_H * 0.64,
+        width:  CANVAS_W * CSS_SCALE,
+        height: CANVAS_H * CSS_SCALE,
         display: 'block',
         borderRadius: 8,
         border: '1px solid rgba(255,255,255,0.1)',

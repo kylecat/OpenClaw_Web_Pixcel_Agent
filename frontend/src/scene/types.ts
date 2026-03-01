@@ -47,4 +47,12 @@ export interface WorldState {
   rows: number
   characters: Map<string, Character>
   decorations: Decoration[]
+  blockedTiles: Set<string>   // "col,row" — decoration collision, used by pathfinding
 }
+
+// T4: canvas hit-test result
+export type SelectedObject =
+  | { kind: 'character'; id: string }
+  | { kind: 'board' }
+  | { kind: 'dashboard' }
+  | { kind: 'decoration'; index: number; decoKind: DecorationKind }

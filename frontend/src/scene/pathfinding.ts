@@ -4,11 +4,17 @@ function key(col: number, row: number): string {
   return `${col},${row}`
 }
 
-function isWalkable(col: number, row: number, grid: GridTile[][]): boolean {
+function isWalkable(
+  col: number,
+  row: number,
+  grid: GridTile[][],
+  blocked: Set<string>,
+): boolean {
   const rows = grid.length
   const cols = rows > 0 ? grid[0].length : 0
   if (row < 0 || row >= rows || col < 0 || col >= cols) return false
-  return true // all tiles are walkable in this MVP (no walls)
+  if (blocked.has(`${col},${row}`)) return false
+  return true
 }
 
 const DIRS = [
@@ -24,9 +30,12 @@ export function findPath(
   endCol: number,
   endRow: number,
   grid: GridTile[][],
+  blocked: Set<string> = new Set(),
 ): Array<{ col: number; row: number }> {
   if (startCol === endCol && startRow === endRow) return []
-  if (!isWalkable(endCol, endRow, grid)) return []
+  // Allow walking TO a blocked tile (e.g. standing in front of furniture)
+  // but not THROUGH blocked tiles
+  if (!isWalkable(endCol, endRow, grid, new Set())) return []
 
   const startKey = key(startCol, startRow)
   const endKey = key(endCol, endRow)
@@ -53,7 +62,7 @@ export function findPath(
       const nc = curr.col + d.dc
       const nr = curr.row + d.dr
       const nk = key(nc, nr)
-      if (visited.has(nk) || !isWalkable(nc, nr, grid)) continue
+      if (visited.has(nk) || !isWalkable(nc, nr, grid, blocked)) continue
       visited.add(nk)
       parent.set(nk, currKey)
       queue.push({ col: nc, row: nr })

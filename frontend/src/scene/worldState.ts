@@ -1,5 +1,24 @@
-import type { WorldState, GridTile, Decoration } from './types'
+import type { WorldState, GridTile, Decoration, DecorationKind } from './types'
 import { tileCenter } from './characters'
+import { computeBlockedTiles } from './collision'
+
+// Draw / collision tile sizes for high-res decorations: [tilesWide, tilesHigh].
+// Shared between renderer.ts (drawing) and collision.ts (pathfinding blocked set).
+export const DECO_TILE_SIZE: Partial<Record<DecorationKind, [number, number]>> = {
+  fridge:         [1,   2  ],
+  squareTable:    [2,   2  ],
+  clock:          [1,   1  ],
+  shelf1:         [4,   2  ],
+  shelf2:         [4,   2  ],
+  pcDesk:         [2,   1.5],
+  sofa1:          [1,   2  ],
+  sofa2:          [1,   2  ],
+  sofa3:          [2,   2  ],
+  pot1:           [1,   2  ],
+  pot2:           [1,   2  ],
+  vendingMachine: [2,   2.5],
+  waterDispenser: [1,   2  ],
+}
 
 // 32 × 64 px = 2048 px wide
 // 12 × 64 px =  768 px tall  → canvas exactly 2048 × 768
@@ -67,6 +86,17 @@ const DECORATIONS: Decoration[] = [
 
 export function createWorldState(): WorldState {
   const grid = buildGrid()
+  const blockedTiles = computeBlockedTiles(DECORATIONS, DECO_TILE_SIZE)
+
+  // Bulletin board (5×3, hangs 1 tile into wall) occupies grid rows 0–1, cols 0–4
+  // Dashboard (5×3, same hang) occupies grid rows 0–1, cols 6–10
+  // Neither is in DECORATIONS, so we block their on-grid tiles manually.
+  for (let dc = 0; dc < 5; dc++) {
+    for (let dr = 0; dr < 2; dr++) {
+      blockedTiles.add(`${BOARD_COL + dc},${BOARD_ROW + dr}`)
+      blockedTiles.add(`${DASH_COL  + dc},${DASH_ROW  + dr}`)
+    }
+  }
 
   const gaiaHome    = tileCenter(GAIA_HOME_COL,    GAIA_HOME_ROW)
   const astraeaHome = tileCenter(ASTRAEA_HOME_COL, ASTRAEA_HOME_ROW)
@@ -76,6 +106,7 @@ export function createWorldState(): WorldState {
     cols: COLS,
     rows: ROWS,
     decorations: DECORATIONS,
+    blockedTiles,
     characters: new Map([
       [
         'gaia',

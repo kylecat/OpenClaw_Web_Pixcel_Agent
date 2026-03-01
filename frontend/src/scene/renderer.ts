@@ -1,29 +1,12 @@
-import type { WorldState, DecorationKind } from './types'
+import type { WorldState, SelectedObject, DecorationKind } from './types'
 import type { Sprites } from './spriteLoader'
-import { TILE_SIZE, SCENE_PAD_L, SCENE_PAD_T } from './characters'
+import { TILE_SIZE, SCENE_PAD_L, SCENE_PAD_T, tileCenter } from './characters'
 import { CHAR_FRAME_W, CHAR_FRAME_H, DIR_ROW, WALK_FRAMES, IDLE_FRAME } from './spriteLoader'
+import { DECO_TILE_SIZE } from './worldState'
 
 // Pixel offset applied to every draw call so the game grid sits inside the padding border
 const OX = SCENE_PAD_L * TILE_SIZE  //  32 px  (0.5 tile left pad)
 const OY = SCENE_PAD_T * TILE_SIZE  //  96 px  (1.5 tile top pad)
-
-// Draw size [tilesW, tilesH] for high-res decoration images.
-// Pixel-art decorations (no entry here) fall back to naturalWidth/16.
-const DECO_TILE_SIZE: Partial<Record<DecorationKind, [number, number]>> = {
-  fridge:         [1,   2  ],
-  squareTable:    [2,   2  ],
-  clock:          [1,   1  ],
-  shelf1:         [4,   2  ],
-  shelf2:         [4,   2  ],
-  pcDesk:         [2,   1.5],
-  sofa1:          [1,   2  ],
-  sofa2:          [1,   2  ],
-  sofa3:          [2,   2  ],
-  pot1:           [1,   2  ],
-  pot2:           [1,   2  ],
-  vendingMachine: [2,   2.5],
-  waterDispenser: [1,   2  ],
-}
 
 // Character sprite drawn at 4× pixel scale → 64×128 CSS px (matches 4× tile scale)
 const CHAR_SCALE = 4
@@ -71,6 +54,8 @@ export function render(
   canvas: HTMLCanvasElement,
   world: WorldState,
   sprites: Sprites | null,
+  selectedObject: SelectedObject | null = null,
+  pendingTile: { col: number; row: number } | null = null,
 ): void {
   // Clear entire canvas to transparent (padding areas stay see-through)
   ctx.clearRect(0, 0, canvas.width, canvas.height)
@@ -155,6 +140,22 @@ export function render(
     }
   }
 
+  // ── Pending move target ───────────────────────────────────────────────────
+  if (pendingTile) {
+    const tx = pendingTile.col * TILE_SIZE + OX
+    const ty = pendingTile.row * TILE_SIZE + OY
+    const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 200)
+    ctx.save()
+    ctx.fillStyle = `rgba(255, 220, 60, ${0.12 + 0.12 * pulse})`
+    ctx.fillRect(tx, ty, TILE_SIZE, TILE_SIZE)
+    ctx.strokeStyle = `rgba(255, 220, 60, ${0.55 + 0.35 * pulse})`
+    ctx.lineWidth = 2
+    ctx.setLineDash([6, 4])
+    ctx.strokeRect(tx + 1.5, ty + 1.5, TILE_SIZE - 3, TILE_SIZE - 3)
+    ctx.setLineDash([])
+    ctx.restore()
+  }
+
   // ── Wall-mounted large tiles (drawn after all floor tiles) ───────────────
   // Drawn AFTER the tile loop so floor tiles cannot cover them.
   // Both hang 1 tile up into the wall padding for a wall-mounted appearance.
@@ -224,6 +225,68 @@ export function render(
     }
     // restore pixel-art mode for characters
     ctx.imageSmoothingEnabled = false
+  }
+
+  // ── Movement paths (dashed arrow, drawn above decorations, below characters) ──
+  // -.-.- pattern: [dash, gap, dot, gap]
+  // lineWidth=25 with round lineCap adds 12.5px to each segment end, eating into
+  // gaps. Use 0-length dot (renders as a round circle) and gaps >> lineWidth so
+  // they stay clearly visible: effective gap = 40 - 12.5 - 12.5 = 15px ✓
+  const DOT_PATTERN: number[] = [20, 40, 0, 40]
+  const PATTERN_LEN = DOT_PATTERN.reduce((s, v) => s + v, 0)  // 100
+  // Marching-ants offset — scrolls the dash pattern over time for a lively feel
+  const dashOffset = -(performance.now() / 60) % PATTERN_LEN
+
+  for (const ch of world.characters.values()) {
+    if (ch.path.length === 0) continue
+
+    // Build point list: character's current pixel pos → each remaining waypoint
+    const pts: Array<{ x: number; y: number }> = [
+      { x: Math.round(ch.x) + OX, y: Math.round(ch.y) + OY },
+      ...ch.path.map((wp) => {
+        const c = tileCenter(wp.col, wp.row)
+        return { x: c.x + OX, y: c.y + OY }
+      }),
+    ]
+
+    ctx.save()
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)'
+    ctx.lineWidth   = 25
+    ctx.lineJoin    = 'round'
+    ctx.lineCap     = 'round'
+    ctx.setLineDash(DOT_PATTERN)
+    ctx.lineDashOffset = dashOffset
+
+    ctx.beginPath()
+    ctx.moveTo(pts[0].x, pts[0].y)
+    for (let i = 1; i < pts.length; i++) {
+      ctx.lineTo(pts[i].x, pts[i].y)
+    }
+    ctx.stroke()
+
+    // Arrowhead at destination (solid, no dash)
+    const last = pts[pts.length - 1]
+    const prev = pts[pts.length - 2]
+    const angle = Math.atan2(last.y - prev.y, last.x - prev.x)
+    const arrowLen    = 56
+    const arrowSpread = Math.PI / 5
+
+    ctx.setLineDash([])
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.4)'
+    ctx.beginPath()
+    ctx.moveTo(last.x, last.y)
+    ctx.lineTo(
+      last.x - arrowLen * Math.cos(angle - arrowSpread),
+      last.y - arrowLen * Math.sin(angle - arrowSpread),
+    )
+    ctx.lineTo(
+      last.x - arrowLen * Math.cos(angle + arrowSpread),
+      last.y - arrowLen * Math.sin(angle + arrowSpread),
+    )
+    ctx.closePath()
+    ctx.fill()
+
+    ctx.restore()
   }
 
   // ── Characters ───────────────────────────────────────────────────────────
@@ -303,6 +366,41 @@ export function render(
       ctx.textAlign = 'center'
       ctx.fillText(`[ ${ch.displayName.toUpperCase()} ]`, cx, cy + 20)
     }
+  }
+
+  // ── Selection highlight ───────────────────────────────────────────────────
+  if (selectedObject) {
+    ctx.save()
+    ctx.strokeStyle = 'rgba(255,255,255,0.85)'
+    ctx.lineWidth = 3
+    ctx.shadowColor = 'rgba(255,255,255,0.6)'
+    ctx.shadowBlur = 8
+
+    if (selectedObject.kind === 'character') {
+      const ch = world.characters.get(selectedObject.id)
+      if (ch) {
+        const cx = Math.round(ch.x) + OX
+        const cy = Math.round(ch.y) + OY
+        const dy = cy + TILE_SIZE / 2 - CHAR_DH
+        const dx = cx - CHAR_DW / 2
+        ctx.strokeRect(dx - 3, dy - 3, CHAR_DW + 6, CHAR_DH + 6)
+      }
+    } else if (selectedObject.kind === 'board') {
+      ctx.strokeRect(OX - 3, OY - TILE_SIZE - 3, 5 * TILE_SIZE + 6, 3 * TILE_SIZE + 6)
+    } else if (selectedObject.kind === 'dashboard') {
+      ctx.strokeRect(OX + 6 * TILE_SIZE - 3, OY - TILE_SIZE - 3, 5 * TILE_SIZE + 6, 3 * TILE_SIZE + 6)
+    } else if (selectedObject.kind === 'decoration') {
+      const deco = world.decorations[selectedObject.index]
+      if (deco) {
+        const tileSz = DECO_TILE_SIZE[deco.kind]
+        const dw = tileSz ? tileSz[0] * TILE_SIZE : TILE_SIZE
+        const dh = tileSz ? tileSz[1] * TILE_SIZE : TILE_SIZE
+        const x = deco.col * TILE_SIZE + OX
+        const y = deco.row * TILE_SIZE + OY
+        ctx.strokeRect(x - 3, y - 3, dw + 6, dh + 6)
+      }
+    }
+    ctx.restore()
   }
 
   ctx.restore()
