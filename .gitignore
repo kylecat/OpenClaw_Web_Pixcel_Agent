@@ -1,3 +1,8 @@
 ref_repo/
 .vscode/
 .claude/
+TS_Document/
+node_modules/
+dist/
+.env
+*.log
