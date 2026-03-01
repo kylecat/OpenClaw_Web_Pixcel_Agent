@@ -15,6 +15,21 @@
 
 ## P0（先做，MVP 必要）
 
+### T0. 開發環境確認與隔離基線
+- 優先級：P0
+- 工時：S
+- 狀態：done
+- 內容：
+  - 確認 Node / npm / nvm 可用
+  - 建立 `.nvmrc` 並固定 Node 版本（建議 20）
+  - 確認 `package-lock.json` 策略（CI 使用 `npm ci`）
+  - 檢查 `.gitignore` 是否覆蓋本地開發噪音檔（如 `.env`, logs, build outputs）
+- DoD：
+  - `node -v` / `npm -v` 可用且版本記錄完成
+  - `.nvmrc` 已存在
+  - 環境檢查結果寫入專案文件（可放 DevDocuments）
+- 依賴：無
+
 ### T1. 專案骨架初始化（NestJS + 前端）
 - 優先級：P0
 - 工時：M
@@ -174,10 +189,11 @@
 ---
 
 ## 建議執行順序（第一週）
-1. T1 -> T2 -> T3
-2. T4 + T7
-3. T5 -> T6
-4. 做一輪整合 demo（P0 freeze）
+1. T0 -> T1
+2. T2 -> T3
+3. T4 + T7
+4. T5 -> T6
+5. 做一輪整合 demo（P0 freeze）
 
 ---
 
