@@ -1,11 +1,12 @@
 ref_repo/
 .vscode/
 .claude/
+TS_Document/
 node_modules/
 **/node_modules/
 dist/
 **/dist/
-*.log
 .env
 .env.*
+*.log
 .DS_Store
