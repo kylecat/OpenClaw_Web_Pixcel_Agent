@@ -3,6 +3,10 @@ ref_repo/
 .claude/
 TS_Document/
 node_modules/
+**/node_modules/
 dist/
+**/dist/
 .env
+.env.*
 *.log
+.DS_Store
