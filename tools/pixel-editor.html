@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<title>Pixel Editor — OpenClaw Assets</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #1a1a2e; color: #eee; font-family: monospace; display: flex; flex-direction: column; height: 100vh; }
+
+  header { padding: 8px 16px; background: #16213e; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; border-bottom: 1px solid #333; }
+  header h1 { font-size: 14px; color: #88aaff; }
+
+  .toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .toolbar label { font-size: 11px; color: #aaa; }
+  select, input[type=text], input[type=number] {
+    background: #2a2a3e; color: #eee; border: 1px solid #555; border-radius: 3px;
+    padding: 2px 6px; font-family: monospace; font-size: 12px;
+  }
+  button {
+    background: #3a4a6a; color: #eee; border: 1px solid #556; border-radius: 3px;
+    padding: 3px 10px; font-family: monospace; font-size: 12px; cursor: pointer;
+  }
+  button:hover { background: #4a5a8a; }
+  button.active { background: #5588cc; border-color: #88aaff; }
+  button.danger { background: #6a2a2a; }
+  button.danger:hover { background: #8a3a3a; }
+  button.success { background: #2a6a3a; }
+  button.success:hover { background: #3a8a4a; }
+
+  .sep { width: 1px; height: 20px; background: #444; }
+
+  main { display: flex; flex: 1; overflow: hidden; }
+
+  /* Left panel */
+  #left-panel { width: 200px; min-width: 160px; background: #16213e; border-right: 1px solid #333; display: flex; flex-direction: column; padding: 10px; gap: 10px; overflow-y: auto; }
+  #left-panel h2 { font-size: 11px; color: #aaa; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+
+  /* Palette */
+  #palette { display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; }
+  .swatch {
+    width: 100%; aspect-ratio: 1; border: 1px solid #222; cursor: pointer; border-radius: 2px;
+  }
+  .swatch:hover { transform: scale(1.15); z-index: 1; }
+  .swatch.selected { outline: 2px solid #fff; outline-offset: 1px; }
+
+  /* Current colors */
+  .current-colors { display: flex; align-items: center; gap: 6px; }
+  .color-preview { width: 28px; height: 28px; border: 2px solid #555; border-radius: 3px; cursor: pointer; }
+  #fg-preview { position: relative; z-index: 1; }
+  #bg-preview { margin-left: -12px; margin-top: 8px; }
+  #custom-color { width: 100%; }
+  #custom-color-hex { width: 80px; }
+
+  /* Canvas area */
+  #canvas-area { flex: 1; display: flex; align-items: center; justify-content: center; overflow: auto; padding: 20px; background: #0d0d1a; }
+  #draw-canvas { image-rendering: pixelated; cursor: crosshair; border: 1px solid #333; }
+
+  /* Layer / frame info */
+  .info-row { font-size: 11px; color: #888; }
+
+  /* Preview */
+  #preview-wrap { display: flex; gap: 8px; flex-wrap: wrap; }
+  .preview-box { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .preview-box canvas { image-rendering: pixelated; }
+  .preview-box span { font-size: 10px; color: #666; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Pixel Editor</h1>
+
+  <div class="toolbar">
+    <label>尺寸</label>
+    <select id="canvas-size">
+      <option value="16x16">16×16（地板/椅子/PC）</option>
+      <option value="16x24">16×24（角色/植物）</option>
+      <option value="16x32">16×32（書架）</option>
+      <option value="32x16">32×16（白板）</option>
+      <option value="32x32" selected>32×32（桌子/地標）</option>
+      <option value="48x48">48×48（大物件）</option>
+      <option value="custom">自訂…</option>
+    </select>
+    <input type="number" id="custom-w" value="32" min="1" max="128" style="width:46px;display:none">
+    <span id="custom-x" style="display:none">×</span>
+    <input type="number" id="custom-h" value="32" min="1" max="128" style="width:46px;display:none">
+    <button id="apply-size">套用</button>
+
+    <div class="sep"></div>
+
+    <label>格子</label>
+    <select id="zoom">
+      <option value="8">8×</option>
+      <option value="12">12×</option>
+      <option value="16" selected>16×</option>
+      <option value="20">20×</option>
+      <option value="24">24×</option>
+    </select>
+
+    <div class="sep"></div>
+
+    <button id="tool-pencil" class="active" title="鉛筆 (P)">✏️ 鉛筆</button>
+    <button id="tool-eraser" title="橡皮擦 (E)">🩹 橡皮</button>
+    <button id="tool-fill" title="填色 (F)">🪣 填色</button>
+    <button id="tool-eyedrop" title="取色 (I)">💉 取色</button>
+
+    <div class="sep"></div>
+
+    <button id="btn-undo" title="Ctrl+Z">↩ 復原</button>
+    <button id="btn-redo" title="Ctrl+Y">↪ 重做</button>
+    <button id="btn-clear" class="danger">🗑 清除</button>
+
+    <div class="sep"></div>
+
+    <input type="text" id="filename" value="object" style="width:90px" placeholder="檔名">
+    <button id="btn-export" class="success">💾 匯出 PNG</button>
+  </div>
+</header>
+
+<main>
+  <!-- Left panel -->
+  <div id="left-panel">
+    <div>
+      <h2>當前顏色</h2>
+      <div class="current-colors">
+        <div id="bg-preview" class="color-preview" title="背景色 (右鍵)"></div>
+        <div id="fg-preview" class="color-preview" title="前景色 (左鍵)"></div>
+      </div>
+      <br>
+      <label style="font-size:11px">自訂顏色</label><br>
+      <input type="color" id="custom-color" value="#ffffff">
+      <input type="text" id="custom-color-hex" value="#ffffff" placeholder="#rrggbb">
+      <button id="set-fg" style="margin-top:4px;width:100%">設為前景</button>
+      <button id="set-bg" style="margin-top:4px;width:100%">設為背景</button>
+    </div>
+
+    <div>
+      <h2>色盤</h2>
+      <div id="palette"></div>
+    </div>
+
+    <div>
+      <h2>預覽</h2>
+      <div id="preview-wrap">
+        <div class="preview-box">
+          <canvas id="preview-1x"></canvas>
+          <span>1×</span>
+        </div>
+        <div class="preview-box">
+          <canvas id="preview-2x"></canvas>
+          <span>2×</span>
+        </div>
+        <div class="preview-box">
+          <canvas id="preview-4x"></canvas>
+          <span>4×</span>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <h2>資產清單</h2>
+      <div style="font-size:10px;color:#666;line-height:1.8">
+        需要製作的 PNG：<br>
+        □ floor_tile.png (16×16)<br>
+        □ bulletin_board.png (32×32)<br>
+        □ dashboard_panel.png (32×32)<br>
+        □ desk.png (32×32)<br>
+        □ plant.png (16×24)<br>
+        □ bookshelf.png (16×32)<br>
+        □ chair.png (16×16)<br>
+      </div>
+    </div>
+  </div>
+
+  <!-- Canvas area -->
+  <div id="canvas-area">
+    <canvas id="draw-canvas"></canvas>
+  </div>
+</main>
+
+<script>
+// ─── State ───────────────────────────────────────────────────────────────
+const PALETTE = [
+  // Transparent
+  'transparent',
+  // Grays
+  '#ffffff','#cccccc','#999999','#666666','#444444','#222222','#000000',
+  // Skin / warm
+  '#ffe0bd','#ffb347','#c68642','#8d5524',
+  // Reds
+  '#ff4444','#cc2222','#881111',
+  // Oranges
+  '#ff8800','#cc6600',
+  // Yellows
+  '#ffdd00','#ccaa00',
+  // Greens
+  '#44cc44','#228822','#115511',
+  '#88ff88','#00cc88',
+  // Blues
+  '#4488ff','#2255cc','#113388',
+  '#88ccff','#3399cc',
+  // Purples
+  '#aa44ff','#7722cc',
+  // Pinks
+  '#ff88cc','#cc4488',
+  // Browns
+  '#cc8855','#996633','#663311',
+  '#d4a05a','#b8860b',
+  // Office colors
+  '#f0e6d0','#d4c4a0','#a08060',
+  '#4a3728','#2d2010',
+  '#1e3a5f','#2e5f8a','#3a7ab5',
+  '#1a4a2a','#2a6a3a',
+]
+
+let canvasW = 32, canvasH = 32
+let zoom = 16
+let fgColor = '#3a7ab5'
+let bgColor = 'transparent'
+let tool = 'pencil'
+let isDrawing = false
+let lastCell = null
+
+// pixel data: array of color strings (transparent = null)
+let pixels = []
+let history = []
+let historyIdx = -1
+
+function initPixels() {
+  pixels = Array(canvasH).fill(null).map(() => Array(canvasW).fill(null))
+}
+
+// ─── Canvas setup ────────────────────────────────────────────────────────
+const drawCanvas = document.getElementById('draw-canvas')
+const ctx = drawCanvas.getContext('2d')
+
+function resizeCanvas() {
+  drawCanvas.width  = canvasW * zoom
+  drawCanvas.height = canvasH * zoom
+  drawCanvas.style.width  = (canvasW * zoom) + 'px'
+  drawCanvas.style.height = (canvasH * zoom) + 'px'
+  redraw()
+}
+
+function redraw() {
+  ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height)
+
+  // Checkerboard for transparent
+  for (let r = 0; r < canvasH; r++) {
+    for (let c = 0; c < canvasW; c++) {
+      const x = c * zoom, y = r * zoom
+      // Checkerboard bg
+      ctx.fillStyle = ((r + c) % 2 === 0) ? '#444' : '#555'
+      ctx.fillRect(x, y, zoom, zoom)
+      // Pixel color
+      const col = pixels[r][c]
+      if (col) {
+        ctx.fillStyle = col
+        ctx.fillRect(x, y, zoom, zoom)
+      }
+    }
+  }
+
+  // Grid lines
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)'
+  ctx.lineWidth = 0.5
+  for (let c = 0; c <= canvasW; c++) {
+    ctx.beginPath(); ctx.moveTo(c * zoom, 0); ctx.lineTo(c * zoom, canvasH * zoom); ctx.stroke()
+  }
+  for (let r = 0; r <= canvasH; r++) {
+    ctx.beginPath(); ctx.moveTo(0, r * zoom); ctx.lineTo(canvasW * zoom, r * zoom); ctx.stroke()
+  }
+
+  updatePreviews()
+}
+
+function updatePreviews() {
+  ;[['preview-1x', 1], ['preview-2x', 2], ['preview-4x', 4]].forEach(([id, scale]) => {
+    const c = document.getElementById(id)
+    c.width = canvasW * scale; c.height = canvasH * scale
+    c.style.width = (canvasW * scale) + 'px'; c.style.height = (canvasH * scale) + 'px'
+    const cx = c.getContext('2d')
+    cx.clearRect(0, 0, c.width, c.height)
+    for (let r = 0; r < canvasH; r++) {
+      for (let col = 0; col < canvasW; col++) {
+        if (pixels[r][col]) {
+          cx.fillStyle = pixels[r][col]
+          cx.fillRect(col * scale, r * scale, scale, scale)
+        }
+      }
+    }
+  })
+}
+
+// ─── Drawing ─────────────────────────────────────────────────────────────
+function cellFromEvent(e) {
+  const rect = drawCanvas.getBoundingClientRect()
+  const x = e.clientX - rect.left, y = e.clientY - rect.top
+  return {
+    c: Math.floor(x / zoom),
+    r: Math.floor(y / zoom),
+  }
+}
+
+function inBounds(c, r) { return c >= 0 && c < canvasW && r >= 0 && r < canvasH }
+
+function setPixel(c, r, color) {
+  if (!inBounds(c, r)) return
+  pixels[r][c] = color === 'transparent' ? null : (color || null)
+}
+
+function floodFill(startC, startR, targetColor, fillColor) {
+  if (!inBounds(startC, startR)) return
+  if (targetColor === fillColor) return
+  const stack = [[startC, startR]]
+  const visited = new Set()
+  while (stack.length) {
+    const [c, r] = stack.pop()
+    if (!inBounds(c, r) || visited.has(`${c},${r}`)) continue
+    if (pixels[r][c] !== targetColor) continue
+    visited.add(`${c},${r}`)
+    pixels[r][c] = fillColor === 'transparent' ? null : fillColor
+    stack.push([c+1,r],[c-1,r],[c,r+1],[c,r-1])
+  }
+}
+
+function applyTool(c, r, button) {
+  const color = button === 2 ? bgColor : fgColor
+  if (tool === 'pencil') setPixel(c, r, color)
+  else if (tool === 'eraser') setPixel(c, r, null)
+  else if (tool === 'eyedrop') {
+    if (!inBounds(c,r)) return
+    const p = pixels[r][c]
+    if (button === 2) setBgColor(p || 'transparent')
+    else setFgColor(p || 'transparent')
+  } else if (tool === 'fill') {
+    const target = pixels[r][c]
+    const fill = button === 2 ? (bgColor === 'transparent' ? null : bgColor) : (color === 'transparent' ? null : color)
+    floodFill(c, r, target, fill)
+  }
+}
+
+function saveHistory() {
+  history = history.slice(0, historyIdx + 1)
+  history.push(pixels.map(row => [...row]))
+  historyIdx = history.length - 1
+  if (history.length > 50) { history.shift(); historyIdx-- }
+}
+
+drawCanvas.addEventListener('mousedown', e => {
+  e.preventDefault()
+  const {c, r} = cellFromEvent(e)
+  if (!inBounds(c, r)) return
+  saveHistory()
+  isDrawing = true
+  lastCell = {c, r}
+  applyTool(c, r, e.button)
+  redraw()
+})
+
+drawCanvas.addEventListener('mousemove', e => {
+  if (!isDrawing) return
+  const {c, r} = cellFromEvent(e)
+  if (lastCell && lastCell.c === c && lastCell.r === r) return
+  lastCell = {c, r}
+  applyTool(c, r, e.button)
+  redraw()
+})
+
+window.addEventListener('mouseup', () => { isDrawing = false; lastCell = null })
+drawCanvas.addEventListener('contextmenu', e => e.preventDefault())
+
+// ─── Palette ─────────────────────────────────────────────────────────────
+let selectedSwatchIdx = 1
+
+function buildPalette() {
+  const el = document.getElementById('palette')
+  el.innerHTML = ''
+  PALETTE.forEach((color, i) => {
+    const sw = document.createElement('div')
+    sw.className = 'swatch' + (i === selectedSwatchIdx ? ' selected' : '')
+    sw.title = color
+    if (color === 'transparent') {
+      sw.style.background = 'repeating-conic-gradient(#888 0% 25%, #bbb 0% 50%) 0 0 / 8px 8px'
+    } else {
+      sw.style.background = color
+    }
+    sw.addEventListener('click', () => {
+      setFgColor(color)
+      selectedSwatchIdx = i
+      buildPalette()
+    })
+    sw.addEventListener('contextmenu', e => {
+      e.preventDefault()
+      setBgColor(color)
+    })
+    el.appendChild(sw)
+  })
+}
+
+function setFgColor(c) {
+  fgColor = c || 'transparent'
+  const el = document.getElementById('fg-preview')
+  if (!c || c === 'transparent') {
+    el.style.background = 'repeating-conic-gradient(#888 0% 25%, #bbb 0% 50%) 0 0 / 8px 8px'
+  } else {
+    el.style.background = c
+    document.getElementById('custom-color').value = c.startsWith('#') && c.length === 7 ? c : '#ffffff'
+    document.getElementById('custom-color-hex').value = c
+  }
+}
+
+function setBgColor(c) {
+  bgColor = c || 'transparent'
+  const el = document.getElementById('bg-preview')
+  if (!c || c === 'transparent') {
+    el.style.background = 'repeating-conic-gradient(#888 0% 25%, #bbb 0% 50%) 0 0 / 8px 8px'
+  } else {
+    el.style.background = c
+  }
+}
+
+// ─── Tool buttons ─────────────────────────────────────────────────────────
+const TOOLS = ['pencil','eraser','fill','eyedrop']
+TOOLS.forEach(t => {
+  document.getElementById('tool-' + t).addEventListener('click', () => {
+    tool = t
+    TOOLS.forEach(x => document.getElementById('tool-'+x).classList.remove('active'))
+    document.getElementById('tool-' + t).classList.add('active')
+  })
+})
+
+// ─── Canvas size ──────────────────────────────────────────────────────────
+document.getElementById('canvas-size').addEventListener('change', function() {
+  const isCustom = this.value === 'custom'
+  document.getElementById('custom-w').style.display = isCustom ? '' : 'none'
+  document.getElementById('custom-h').style.display = isCustom ? '' : 'none'
+  document.getElementById('custom-x').style.display = isCustom ? '' : 'none'
+  if (!isCustom) {
+    const [w, h] = this.value.split('x').map(Number)
+    document.getElementById('custom-w').value = w
+    document.getElementById('custom-h').value = h
+  }
+})
+
+document.getElementById('apply-size').addEventListener('click', () => {
+  const w = parseInt(document.getElementById('custom-w').value) || 32
+  const h = parseInt(document.getElementById('custom-h').value) || 32
+  canvasW = Math.max(1, Math.min(128, w))
+  canvasH = Math.max(1, Math.min(128, h))
+  initPixels()
+  resizeCanvas()
+})
+
+document.getElementById('canvas-size').addEventListener('change', function() {
+  const isCustom = this.value === 'custom'
+  if (!isCustom) {
+    const [w, h] = this.value.split('x').map(Number)
+    canvasW = w; canvasH = h
+    document.getElementById('custom-w').value = w
+    document.getElementById('custom-h').value = h
+    document.getElementById('custom-w').style.display = isCustom ? '' : 'none'
+    document.getElementById('custom-h').style.display = isCustom ? '' : 'none'
+    document.getElementById('custom-x').style.display  = isCustom ? '' : 'none'
+    initPixels(); resizeCanvas()
+  }
+})
+
+// Zoom
+document.getElementById('zoom').addEventListener('change', function() {
+  zoom = parseInt(this.value)
+  resizeCanvas()
+})
+
+// ─── Undo / Redo ──────────────────────────────────────────────────────────
+document.getElementById('btn-undo').addEventListener('click', () => {
+  if (historyIdx > 0) { historyIdx--; pixels = history[historyIdx].map(r=>[...r]); redraw() }
+})
+document.getElementById('btn-redo').addEventListener('click', () => {
+  if (historyIdx < history.length - 1) { historyIdx++; pixels = history[historyIdx].map(r=>[...r]); redraw() }
+})
+document.getElementById('btn-clear').addEventListener('click', () => {
+  saveHistory(); initPixels(); redraw()
+})
+
+// ─── Custom color inputs ──────────────────────────────────────────────────
+document.getElementById('custom-color').addEventListener('input', function() {
+  document.getElementById('custom-color-hex').value = this.value
+})
+document.getElementById('custom-color-hex').addEventListener('input', function() {
+  if (/^#[0-9a-fA-F]{6}$/.test(this.value)) {
+    document.getElementById('custom-color').value = this.value
+  }
+})
+document.getElementById('set-fg').addEventListener('click', () => {
+  setFgColor(document.getElementById('custom-color-hex').value || document.getElementById('custom-color').value)
+})
+document.getElementById('set-bg').addEventListener('click', () => {
+  setBgColor(document.getElementById('custom-color-hex').value || document.getElementById('custom-color').value)
+})
+
+// ─── Export PNG ───────────────────────────────────────────────────────────
+document.getElementById('btn-export').addEventListener('click', () => {
+  const out = document.createElement('canvas')
+  out.width = canvasW; out.height = canvasH
+  const oc = out.getContext('2d')
+  for (let r = 0; r < canvasH; r++) {
+    for (let c = 0; c < canvasW; c++) {
+      if (pixels[r][c]) {
+        oc.fillStyle = pixels[r][c]
+        oc.fillRect(c, r, 1, 1)
+      }
+    }
+  }
+  const link = document.createElement('a')
+  const name = document.getElementById('filename').value.trim() || 'object'
+  link.download = name + '.png'
+  link.href = out.toDataURL('image/png')
+  link.click()
+})
+
+// ─── Keyboard shortcuts ───────────────────────────────────────────────────
+window.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return
+  if (e.ctrlKey && e.key === 'z') { document.getElementById('btn-undo').click(); return }
+  if (e.ctrlKey && (e.key === 'y' || e.key === 'Z')) { document.getElementById('btn-redo').click(); return }
+  if (e.key === 'p' || e.key === 'P') document.getElementById('tool-pencil').click()
+  if (e.key === 'e' || e.key === 'E') document.getElementById('tool-eraser').click()
+  if (e.key === 'f' || e.key === 'F') document.getElementById('tool-fill').click()
+  if (e.key === 'i' || e.key === 'I') document.getElementById('tool-eyedrop').click()
+})
+
+// ─── Init ─────────────────────────────────────────────────────────────────
+buildPalette()
+setFgColor('#3a7ab5')
+setBgColor('transparent')
+initPixels()
+resizeCanvas()
+saveHistory()
+</script>
+</body>
+</html>

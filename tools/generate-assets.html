@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<title>Asset Generator — OpenClaw</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #1a1a2e; color: #eee; font-family: monospace; padding: 24px; }
+  h1 { font-size: 18px; color: #88aaff; margin-bottom: 8px; }
+  p  { font-size: 12px; color: #aaa; margin-bottom: 20px; }
+  .grid { display: flex; flex-wrap: wrap; gap: 24px; }
+  .card {
+    background: #16213e; border: 1px solid #334; border-radius: 8px;
+    padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 10px;
+    min-width: 160px;
+  }
+  .card h2 { font-size: 12px; color: #ccd; }
+  .card .size { font-size: 10px; color: #667; }
+  .previews { display: flex; gap: 8px; align-items: flex-end; }
+  .preview-wrap { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .preview-wrap span { font-size: 9px; color: #555; }
+  canvas { image-rendering: pixelated; border: 1px solid #333; }
+  button {
+    background: #2a6a3a; color: #eee; border: 1px solid #3a8a4a;
+    border-radius: 4px; padding: 4px 14px; font-family: monospace;
+    font-size: 11px; cursor: pointer; width: 100%;
+  }
+  button:hover { background: #3a8a4a; }
+  #btn-all {
+    background: #3a5a8a; border-color: #5577cc;
+    font-size: 14px; padding: 10px 32px; width: auto;
+    margin-bottom: 24px;
+  }
+  #btn-all:hover { background: #4a6aaa; }
+  .done { color: #4caf50; font-size: 11px; }
+</style>
+</head>
+<body>
+
+<h1>OpenClaw Asset Generator</h1>
+<p>自動產生場景所需的像素圖 PNG 檔。點「下載全部」一次下載所有素材。</p>
+<button id="btn-all">⬇ 下載全部 PNG</button>
+<div class="grid" id="grid"></div>
+
+<script>
+// ─── Palette ──────────────────────────────────────────────────────────────
+// Each char maps to an RGBA array [r,g,b,a]  (a=0 → transparent)
+const P = {
+  _: [0,0,0,0],         // transparent
+
+  // Floor / neutral
+  F: [196,168,130,255], // floor warm beige
+  f: [180,154,118,255], // floor darker
+  E: [140,117,90,255],  // floor edge
+  e: [110,88,65,255],   // floor dark edge
+  D: [92,75,53,255],    // floor shadow
+
+  // Wood browns
+  W: [106,66,38,255],   // dark wood
+  w: [140,90,55,255],   // mid wood
+  v: [170,118,75,255],  // light wood
+  B: [80,50,28,255],    // very dark wood
+
+  // Cork / paper
+  K: [196,146,74,255],  // cork
+  k: [175,128,62,255],  // cork dark
+  p: [240,230,210,255], // paper white
+  P: [255,245,225,255], // paper bright
+
+  // Pin / note colors
+  r: [220,60,60,255],   // red pin
+  g: [60,180,80,255],   // green note
+  b: [60,120,220,255],  // blue note
+  y: [220,190,40,255],  // yellow note
+  n: [200,90,40,255],   // orange note
+
+  // Screen / dashboard
+  S: [15,25,50,255],    // screen bg dark
+  s: [20,40,80,255],    // screen bg
+  A: [80,200,255,255],  // screen blue accent
+  a: [40,120,200,255],  // screen mid blue
+  G: [60,220,120,255],  // screen green bar
+  R: [220,80,80,255],   // screen red bar
+  Y: [220,200,60,255],  // screen yellow
+  L: [180,220,255,255], // screen light
+
+  // Desk
+  T: [200,170,130,255], // desk surface
+  t: [175,148,110,255], // desk surface dark
+  U: [90,65,42,255],    // desk edge dark
+
+  // Plant
+  c: [50,180,80,255],   // leaf bright
+  C: [34,140,55,255],   // leaf mid
+  J: [22,100,38,255],   // leaf dark
+  j: [14,70,25,255],    // leaf very dark
+  O: [160,110,60,255],  // pot
+  o: [130,85,40,255],   // pot dark
+  X: [100,70,35,255],   // pot very dark
+  Z: [80,55,25,255],    // pot base
+
+  // Chair
+  H: [75,75,90,255],    // chair dark
+  h: [100,100,115,255], // chair mid
+  I: [130,130,145,255], // chair light
+  M: [55,55,70,255],    // chair very dark
+
+  // Bookshelf
+  Q: [180,140,90,255],  // shelf wood
+  q: [150,115,70,255],  // shelf dark
+  '1': [180,60,60,255], // book red
+  '2': [60,120,180,255],// book blue
+  '3': [60,160,80,255], // book green
+  '4': [180,140,40,255],// book yellow
+  '5': [140,60,160,255],// book purple
+  '6': [60,160,160,255],// book teal
+  '7': [200,100,40,255],// book orange
+  '8': [100,100,100,255],// book gray
+}
+
+// ─── Assets ───────────────────────────────────────────────────────────────
+const ASSETS = [
+
+  // ── floor_tile 16×16
+  { name:'floor_tile', w:16, h:16, art:[
+    'eeeeeeeeeeeeeeee',
+    'eFFFFFFFFFFFFFFe',
+    'eFFFFFFFFFFFFFfe',
+    'eFFFfFFFFFfFFFfe',
+    'eFFFFFFFFFFFFFfe',
+    'eFFFFFfFFFFFfFfe',
+    'eFFFFFFFFFFFFFfe',
+    'eFffFFFFFFFfFFfe',
+    'eFFFFFFFFFFFFFfe',
+    'eFFFfFFFFFfFFFfe',
+    'eFFFFFFFFFFFFFfe',
+    'eFFFFFfFFFFFfFfe',
+    'eFFFFFFFFFFFFFfe',
+    'eFFFfFFFFFfFFFfe',
+    'eFFFFFFFFFFFFFFe',
+    'eeeeeeeeeeeeeeee',
+  ]},
+
+  // ── bulletin_board 32×32
+  { name:'bulletin_board', w:32, h:32, art:[
+    'WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW',
+    'WwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwW',
+    'WwKKKKKKKKKKKKKKKKKKKKKKKKKKKKwW',
+    'WwKKKKKKKKKKKKKKKKKKKKKKKKKKKKwW',
+    'WwKKpppppKKKKyyyyyyKKKKKKKKKKKKwW',
+    'WwKKpppppKKKKyyyyyyKKKKKKKKKKKKwW',
+    'WwKKpppppKKKKyyyyyyKKKgggggKKKKwW',
+    'WwKKpppppKKKKyyyyyyKKKgggggKKKKwW',
+    'WwKKpppppKKKKyyyyyyKKKgggggKKKKwW',
+    'WwKKKrKKKKKKKKKKKKKKKKKKKKKKKKwW',
+    'WwKKKKKKKKKKKKKKKKKKKKKKKKKKKKwW',
+    'WwKKbbbbbbbbKKKKKKKKKKKKKKKKKKwW',
+    'WwKKbbbbbbbbKKKKKKKKKKKKKKKKKKwW',
+    'WwKKbbbbbbbbKKKnnnnnnKKKKKKKKKwW',
+    'WwKKbbbbbbbbKKKnnnnnnKKKKKKKKKwW',
+    'WwKKKbKKKKKKKKKnnnnnnKKKKKKKKKwW',
+    'WwKKKKKKKKKKKKKnnnnnnKKKKKKKKKwW',
+    'WwKKKKKKKKKKKKKKnKKKKKKKKKKKKKwW',
+    'WwKKKKKKKKKKKKKKKKKKKKKKKKKKKKwW',
+    'WwKKpppppppppppKKKKKKKKKKKKKKKwW',
+    'WwKKpppppppppppKKKKKKKKKKKKKKKwW',
+    'WwKKpppppppppppKKKKKKKKKKKKKKKwW',
+    'WwKKKKKKKKKKKKKKKKKKKKKKKKKKKKwW',
+    'WwKKKKKKKKKKKKKKKKKKKKKKKKKKKKwW',
+    'WwKKKKKKKKKKKKKKKKKKKKKKKKKKKKwW',
+    'WwKKKKKKKKKKKKKKKKKKKKKKKKKKKKwW',
+    'WwKKKKKKKKKKKKKKKKKKKKKKKKKKKKwW',
+    'WwKKKKKKKKKKKKKKKKKKKKKKKKKKKKwW',
+    'WwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwW',
+    'WwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwW',
+    'WwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwW',
+    'WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW',
+  ]},
+
+  // ── dashboard_panel 16×32  (1 tile wide × 2 tiles tall)
+  { name:'dashboard_panel', w:16, h:32, art:[
+    'BBBBBBBBBBBBBBBB',   // row 0  top frame
+    'BSSSSSSSSSSSSSSB',   // row 1  screen bg
+    'BSLLLLLLLLLLLLsB',  // row 2  panel-1 header bar
+    'BSLaaaaaaaaaaLsB',   // row 3  padding
+    'BSLaGGGaRRRaaLsB',  // row 4  bar chart (green / red)
+    'BSLaGGGaRRRaaLsB',  // row 5
+    'BSLaGGGaRRRaaLsB',  // row 6
+    'BSLaGGGaRRRaaLsB',  // row 7
+    'BSLaGGGaRRRaaLsB',  // row 8
+    'BSLaGGGaRRRaaLsB',  // row 9
+    'BSLaaaaaaaaaaLsB',   // row 10 padding
+    'BSLaAAAAAAAAaLsB',   // row 11 trend line (blue)
+    'BSLaAAAAAAAAaLsB',   // row 12
+    'BSLaAAAAAAAAaLsB',   // row 13
+    'BSLLLLLLLLLLLLsB',  // row 14 panel-1 footer bar
+    'BSSSSSSSSSSSSSSB',   // row 15 divider
+    'BSSSSSSSSSSSSSSB',   // row 16 divider
+    'BSLLLLLLLLLLLLsB',  // row 17 panel-2 header bar
+    'BSLaaaaaaaaaaLsB',   // row 18 padding
+    'BSLaGGaYYYYaaLsB',  // row 19 alt bars (green / yellow)
+    'BSLaGGaYYYYaaLsB',  // row 20
+    'BSLaGGaYYYYaaLsB',  // row 21
+    'BSLaGGaYYYYaaLsB',  // row 22
+    'BSLaaaaaaaaaaLsB',   // row 23 padding
+    'BSLGaRaAaaaaaLsB',  // row 24 status dots: G=ok R=err A=info
+    'BSLLLLLLLLLLLLsB',  // row 25 panel-2 footer bar
+    'BSSSSSSSSSSSSSSB',   // row 26 screen bg
+    'BSSSSSSSSSSSSSSB',   // row 27
+    'BSSSSSSSSSSSSSSB',   // row 28
+    'BSSSSSSSSSSSSSSB',   // row 29
+    'BBBBBBBBBBBBBBBs',  // row 30 bottom frame
+    'ssssssssssssssss',   // row 31 drop shadow
+  ]},
+
+  // ── desk 32×32
+  { name:'desk', w:32, h:32, art:[
+    'UUUUUUUUUUUUUUUUUUUUUUUUUUUUUUU',
+    'UTTTTTTTTTTTTTTTTTTTTTTTTTTTTtU',
+    'UTTTTTTTTTTTTTTTTTTTTTTTTTTTTtU',
+    'UTTTTTTTTTTTTTTTTTTTTTTTTTTTTtU',
+    'UTTTSSSSSSSSSSSSSSSSSSSSSSTTTTtU',
+    'UTTTSaaaaaaaaaaaaaaaaaaaaSttttTU',
+    'UTTTSaaaaaaaaaaaaaaaaaaaaSttttTU',
+    'UTTTSaAAaaaaaaaaaaaaaaaaaSttttTU',
+    'UTTTSaAAaaaaaaaaaaaaaaaaaSttttTU',
+    'UTTTSaaaaaaaaaaaaaaaaaaaaSttttTU',
+    'UTTTSaaaaaaaaaaaaaaaaaaaaSttttTU',
+    'UTTTSSSSSSSSSSSSSSSSSSSSSSttttTU',
+    'UTTTTTTTTTTTTTTTTTTTTTTTTTTTTtU',
+    'UTTTTTTTtTTTTTTTTTTTTTTTTTTTTtU',
+    'UTTTTTTTtTTTTTTTTTTTTTTTTTTTTtU',
+    'UTTTTTTTtTTTTTTTTTTTTTTTTTTTTtU',
+    'UTTTTTTTtTTTTTTTTTTTTTTTTTTTTtU',
+    'UTTTTTTTtTTTTTTTTTTTTTTTTTTTTtU',
+    'UTTTTTTTtTTTTTTTTTTTTTTTTTTTTtU',
+    'UTTTTTTTtTTTTTTTTTTTTTTTTTTTTtU',
+    'UTTtttttttttttttttttttttttttttTU',
+    'UTTtttttttttttttttttttttttttttTU',
+    'UTTtttttttttttttttttttttttttttTU',
+    'UTTTTTTTTTTTTTTTTTTTTTTTTTTTTtU',
+    'UTTTTTTTTTTTTTTTTTTTTTTTTTTTTtU',
+    'UUUUUUUUUUUUUUUUUUUUUUUUUUUUUUU',
+    '________________________________',
+    '________________________________',
+    '________________________________',
+    '________________________________',
+    '________________________________',
+    '________________________________',
+  ]},
+
+  // ── plant 16×24
+  { name:'plant', w:16, h:24, art:[
+    '______cccc______',
+    '_____cCCCcc_____',
+    '____cCJJJCCc____',
+    '___ccCJJJJCcc___',
+    '__ccCCJJJJCCcc__',
+    '_cCCCJjjJJCCCc__',
+    '_cCJJJjjJJJCCc__',
+    '__cCCCJJJCCCc___',
+    '___ccCCCCCcc____',
+    '____ccccccc_____',
+    '_____cCCCcc_____',
+    '______ccc_______',
+    '_______c________',
+    '_______c________',
+    '______ccc_______',
+    '____OOOOOOOO____',
+    '___OooooooooO___',
+    '__OooooooooooO__',
+    '__OooooooooooO__',
+    '__OooooooooooO__',
+    '__OXXXXXXXXXXXO__',
+    '__OXXXXXXXXXXXO__',
+    '__ZZZZZZZZZZZZZ__',
+    '________________',
+  ]},
+
+  // ── bookshelf 16×32
+  { name:'bookshelf', w:16, h:32, art:[
+    'QQQQQQQQQQQQQQQQ',
+    'QqqqqqqqqqqqqqqQ',
+    'Q12345678123456Q',
+    'Q12345678123456Q',
+    'Q12345678123456Q',
+    'Q12345678123456Q',
+    'Q12345678123456Q',
+    'Q12345678123456Q',
+    'Q12345678123456Q',
+    'Q12345678123456Q',
+    'QqqqqqqqqqqqqqqQ',
+    'QqqqqqqqqqqqqqqQ',
+    'Q56781234567812Q',
+    'Q56781234567812Q',
+    'Q56781234567812Q',
+    'Q56781234567812Q',
+    'Q56781234567812Q',
+    'Q56781234567812Q',
+    'Q56781234567812Q',
+    'Q56781234567812Q',
+    'QqqqqqqqqqqqqqqQ',
+    'QqqqqqqqqqqqqqqQ',
+    'Q34125678341256Q',
+    'Q34125678341256Q',
+    'Q34125678341256Q',
+    'Q34125678341256Q',
+    'Q34125678341256Q',
+    'Q34125678341256Q',
+    'Q34125678341256Q',
+    'Q34125678341256Q',
+    'QqqqqqqqqqqqqqqQ',
+    'QQQQQQQQQQQQQQQQ',
+  ]},
+
+  // ── chair 16×16
+  { name:'chair', w:16, h:16, art:[
+    '____MMMMMMMM____',
+    '___MhhhhhhhhM___',
+    '__MhIIIIIIIIhM__',
+    '__MhIIIIIIIIhM__',
+    '__MhIIIIIIIIhM__',
+    '__MhIIIIIIIIhM__',
+    '__MhIIIIIIIIhM__',
+    '__MhhhhhhhhhhM__',
+    '__MMhhhhhhhhMM__',
+    '____MMMMMMMM____',
+    '______hhhh______',
+    '_____hMMMMh_____',
+    '____hM____Mh____',
+    '___MM______MM___',
+    '________________',
+    '________________',
+  ]},
+
+]
+
+// ─── Render ───────────────────────────────────────────────────────────────
+function artToCanvas(asset) {
+  const cvs = document.createElement('canvas')
+  cvs.width = asset.w
+  cvs.height = asset.h
+  const ctx = cvs.getContext('2d')
+  const img = ctx.createImageData(asset.w, asset.h)
+  for (let r = 0; r < asset.h; r++) {
+    const row = asset.art[r] || ''
+    for (let c = 0; c < asset.w; c++) {
+      const ch = row[c] || '_'
+      const color = P[ch] || P['_']
+      const idx = (r * asset.w + c) * 4
+      img.data[idx]   = color[0]
+      img.data[idx+1] = color[1]
+      img.data[idx+2] = color[2]
+      img.data[idx+3] = color[3]
+    }
+  }
+  ctx.putImageData(img, 0, 0)
+  return cvs
+}
+
+function download(canvas, filename) {
+  const link = document.createElement('a')
+  link.download = filename
+  link.href = canvas.toDataURL('image/png')
+  link.click()
+}
+
+// ─── Build UI ────────────────────────────────────────────────────────────
+const grid = document.getElementById('grid')
+
+ASSETS.forEach(asset => {
+  const src = artToCanvas(asset)
+
+  const card = document.createElement('div')
+  card.className = 'card'
+
+  const title = document.createElement('h2')
+  title.textContent = asset.name + '.png'
+
+  const size = document.createElement('div')
+  size.className = 'size'
+  size.textContent = asset.w + ' × ' + asset.h + ' px'
+
+  const previews = document.createElement('div')
+  previews.className = 'previews'
+
+  ;[1, 2, 4, 8].forEach(scale => {
+    const wrap = document.createElement('div')
+    wrap.className = 'preview-wrap'
+
+    const cv = document.createElement('canvas')
+    cv.width  = asset.w * scale
+    cv.height = asset.h * scale
+    cv.style.width  = (asset.w * scale) + 'px'
+    cv.style.height = (asset.h * scale) + 'px'
+    cv.style.imageRendering = 'pixelated'
+    const cx = cv.getContext('2d')
+    cx.imageSmoothingEnabled = false
+    cx.drawImage(src, 0, 0, asset.w * scale, asset.h * scale)
+
+    const lbl = document.createElement('span')
+    lbl.textContent = scale + '×'
+
+    wrap.appendChild(cv)
+    wrap.appendChild(lbl)
+    previews.appendChild(wrap)
+  })
+
+  const btn = document.createElement('button')
+  btn.textContent = '⬇ 下載 ' + asset.name + '.png'
+  btn.addEventListener('click', () => {
+    download(src, asset.name + '.png')
+    btn.textContent = '✓ 已下載'
+    btn.style.background = '#1a4a2a'
+    setTimeout(() => {
+      btn.textContent = '⬇ 下載 ' + asset.name + '.png'
+      btn.style.background = ''
+    }, 2000)
+  })
+
+  card.appendChild(title)
+  card.appendChild(size)
+  card.appendChild(previews)
+  card.appendChild(btn)
+  grid.appendChild(card)
+})
+
+// ─── Download all ─────────────────────────────────────────────────────────
+document.getElementById('btn-all').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-all')
+  btn.textContent = '⏳ 下載中...'
+  for (let i = 0; i < ASSETS.length; i++) {
+    const asset = ASSETS[i]
+    const src = artToCanvas(asset)
+    await new Promise(resolve => setTimeout(resolve, 300))
+    download(src, asset.name + '.png')
+  }
+  btn.textContent = '✓ 全部下載完成！'
+  setTimeout(() => { btn.textContent = '⬇ 下載全部 PNG' }, 3000)
+})
+</script>
+</body>
+</html>
