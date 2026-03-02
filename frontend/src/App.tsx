@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AgentCard } from './components/AgentCard'
 import { OfficeScene } from './components/OfficeScene'
+import { BoardModal } from './components/BoardModal'
 import type { Agent } from './components/AgentCard'
 import type { OfficeSceneHandle, WalkTarget } from './components/OfficeScene'
+import type { SelectedObject } from './scene/types'
 import { COLS, ROWS } from './scene/worldState'
 
 interface HealthResponse {
@@ -25,6 +27,13 @@ function App() {
   const [healthError, setHealthError] = useState(false)
   const [agents, setAgents] = useState<Agent[]>([])
   const sceneRef = useRef<OfficeSceneHandle>(null)
+
+  // Board modal
+  const [boardOpen, setBoardOpen] = useState(false)
+
+  const handleSelect = useCallback((obj: SelectedObject | null) => {
+    if (obj?.kind === 'board') setBoardOpen(true)
+  }, [])
 
   // Manual walk controls
   const [selectedAgent, setSelectedAgent] = useState<string>('gaia')
@@ -77,7 +86,7 @@ function App() {
 
       {/* Pixel Scene */}
       <div style={{ marginBottom: '1.5rem' }}>
-        <OfficeScene ref={sceneRef} />
+        <OfficeScene ref={sceneRef} onSelect={handleSelect} />
       </div>
 
       {/* Manual Walk Controls */}
@@ -132,6 +141,8 @@ function App() {
           <AgentCard key={agent.id} agent={agent} onStatusChange={handleStatusChange} />
         ))}
       </div>
+      {/* Board Modal */}
+      <BoardModal open={boardOpen} onClose={() => setBoardOpen(false)} />
     </div>
   )
 }
