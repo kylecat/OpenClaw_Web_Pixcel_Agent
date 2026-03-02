@@ -6,6 +6,7 @@ export interface Agent {
   displayName: string
   status: AgentStatus
   emoji: string
+  model: string
   currentTaskId?: string
   lastSeenAt: string
 }
@@ -21,6 +22,7 @@ export class AgentsService {
       displayName: 'Gaia',
       status: AgentStatus.IDLE,
       emoji: STATUS_EMOJI[AgentStatus.IDLE],
+      model: 'gpt-5.3-codex',
       lastSeenAt: now,
     })
     this.agents.set('astraea', {
@@ -28,6 +30,7 @@ export class AgentsService {
       displayName: 'Astraea',
       status: AgentStatus.IDLE,
       emoji: STATUS_EMOJI[AgentStatus.IDLE],
+      model: 'google-gemini-cli/gemini-3-flash-preview',
       lastSeenAt: now,
     })
   }

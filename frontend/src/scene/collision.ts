@@ -80,17 +80,18 @@ export function hitTest(
     }
   }
 
-  // 2. Bulletin board — 5×3 tiles, top-left = (OX, OY − TILE_SIZE)
+  // 2. Bulletin board — 5×3 tiles, top-left = (OX + 1*TILE, OY − TILE_SIZE)
+  //    Layout: 1格 | Board (cols 1–5) | 3格 | Dashboard (cols 9–13)
   if (
-    logicalX >= OX && logicalX <= OX + 5 * TILE_SIZE &&
+    logicalX >= OX + 1 * TILE_SIZE && logicalX <= OX + 6 * TILE_SIZE &&
     logicalY >= OY - TILE_SIZE && logicalY <= OY + 2 * TILE_SIZE
   ) {
     return { kind: 'board' }
   }
 
-  // 3. Dashboard — 5×3 tiles, top-left = (OX + 6*TILE_SIZE, OY − TILE_SIZE)
+  // 3. Dashboard — 5×3 tiles, top-left = (OX + 9*TILE, OY − TILE_SIZE)
   if (
-    logicalX >= OX + 6 * TILE_SIZE && logicalX <= OX + 11 * TILE_SIZE &&
+    logicalX >= OX + 9 * TILE_SIZE && logicalX <= OX + 14 * TILE_SIZE &&
     logicalY >= OY - TILE_SIZE && logicalY <= OY + 2 * TILE_SIZE
   ) {
     return { kind: 'dashboard' }

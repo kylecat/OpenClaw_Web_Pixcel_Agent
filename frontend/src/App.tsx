@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { AgentCard } from './components/AgentCard'
 import { OfficeScene } from './components/OfficeScene'
 import { BoardModal } from './components/BoardModal'
+import { DashboardModal } from './components/DashboardModal'
 import type { Agent } from './components/AgentCard'
 import type { OfficeSceneHandle, WalkTarget } from './components/OfficeScene'
 import type { SelectedObject } from './scene/types'
@@ -30,9 +31,12 @@ function App() {
 
   // Board modal
   const [boardOpen, setBoardOpen] = useState(false)
+  // Dashboard modal
+  const [dashboardOpen, setDashboardOpen] = useState(false)
 
   const handleSelect = useCallback((obj: SelectedObject | null) => {
     if (obj?.kind === 'board') setBoardOpen(true)
+    if (obj?.kind === 'dashboard') setDashboardOpen(true)
   }, [])
 
   // Manual walk controls
@@ -84,9 +88,20 @@ function App() {
         </p>
       )}
 
-      {/* Pixel Scene */}
-      <div style={{ marginBottom: '1.5rem' }}>
-        <OfficeScene ref={sceneRef} onSelect={handleSelect} />
+      {/* Main area: Canvas (left) + Agent Cards (right) */}
+      <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', alignItems: 'flex-start' }}>
+        {/* Pixel Scene */}
+        <div style={{ flexShrink: 0 }}>
+          <OfficeScene ref={sceneRef} onSelect={handleSelect} />
+        </div>
+
+        {/* Agent Cards — vertical stack */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', minWidth: 220 }}>
+          <h3 style={{ margin: 0, fontSize: '0.9rem', color: '#aaa' }}>Agents</h3>
+          {agents.map((agent) => (
+            <AgentCard key={agent.id} agent={agent} onStatusChange={handleStatusChange} />
+          ))}
+        </div>
       </div>
 
       {/* Manual Walk Controls */}
@@ -133,16 +148,10 @@ function App() {
           走過去
         </button>
       </div>
-
-      {/* Agent Cards */}
-      <h2 style={{ marginBottom: '0.75rem' }}>Agents</h2>
-      <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-        {agents.map((agent) => (
-          <AgentCard key={agent.id} agent={agent} onStatusChange={handleStatusChange} />
-        ))}
-      </div>
       {/* Board Modal */}
       <BoardModal open={boardOpen} onClose={() => setBoardOpen(false)} />
+      {/* Dashboard Modal */}
+      <DashboardModal open={dashboardOpen} onClose={() => setDashboardOpen(false)} />
     </div>
   )
 }
