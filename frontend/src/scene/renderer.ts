@@ -2,7 +2,7 @@ import type { WorldState, SelectedObject, DecorationKind } from './types'
 import type { Sprites } from './spriteLoader'
 import { TILE_SIZE, SCENE_PAD_L, SCENE_PAD_T, tileCenter } from './characters'
 import { CHAR_FRAME_W, CHAR_FRAME_H, DIR_ROW, WALK_FRAMES, IDLE_FRAME } from './spriteLoader'
-import { DECO_TILE_SIZE } from './worldState'
+import { DECO_TILE_SIZE, BOARD_COL, DASH_COL } from './worldState'
 
 // Pixel offset applied to every draw call so the game grid sits inside the padding border
 const OX = SCENE_PAD_L * TILE_SIZE  //  32 px  (0.5 tile left pad)
@@ -159,23 +159,23 @@ export function render(
   // ── Wall-mounted large tiles (drawn after all floor tiles) ───────────────
   // Drawn AFTER the tile loop so floor tiles cannot cover them.
   // Both hang 1 tile up into the wall padding for a wall-mounted appearance.
-  // Layout: bulletin board (5 tiles) | 1-tile gap | dashboard (5 tiles)
+  // Layout: 1格 | Board (5格) | 3格 | Dashboard (5格)
   if (sprites) {
     ctx.imageSmoothingEnabled = true
     ctx.imageSmoothingQuality = 'high'
     const boardY = OY - TILE_SIZE
-    // Bulletin board: 5×3, left-anchored
+    // Bulletin board: 5×3, starts at BOARD_COL
     ctx.drawImage(
       sprites.bulletinBoard,
-      OX,
+      OX + BOARD_COL * TILE_SIZE,
       boardY,
       5 * TILE_SIZE,
       3 * TILE_SIZE,
     )
-    // Dashboard: 5×3, starts 1-tile gap after the bulletin board (col 6)
+    // Dashboard: 5×3, starts at DASH_COL (3-tile gap after board)
     ctx.drawImage(
       sprites.dashboardPanel,
-      OX + 6 * TILE_SIZE,
+      OX + DASH_COL * TILE_SIZE,
       boardY,
       5 * TILE_SIZE,
       3 * TILE_SIZE,
@@ -386,9 +386,9 @@ export function render(
         ctx.strokeRect(dx - 3, dy - 3, CHAR_DW + 6, CHAR_DH + 6)
       }
     } else if (selectedObject.kind === 'board') {
-      ctx.strokeRect(OX - 3, OY - TILE_SIZE - 3, 5 * TILE_SIZE + 6, 3 * TILE_SIZE + 6)
+      ctx.strokeRect(OX + BOARD_COL * TILE_SIZE - 3, OY - TILE_SIZE - 3, 5 * TILE_SIZE + 6, 3 * TILE_SIZE + 6)
     } else if (selectedObject.kind === 'dashboard') {
-      ctx.strokeRect(OX + 6 * TILE_SIZE - 3, OY - TILE_SIZE - 3, 5 * TILE_SIZE + 6, 3 * TILE_SIZE + 6)
+      ctx.strokeRect(OX + DASH_COL * TILE_SIZE - 3, OY - TILE_SIZE - 3, 5 * TILE_SIZE + 6, 3 * TILE_SIZE + 6)
     } else if (selectedObject.kind === 'decoration') {
       const deco = world.decorations[selectedObject.index]
       if (deco) {

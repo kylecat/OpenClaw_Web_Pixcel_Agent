@@ -1,6 +1,7 @@
 import type { Decoration, DecorationKind, WorldState, SelectedObject } from './types'
 import { TILE_SIZE, SCENE_PAD_L, SCENE_PAD_T } from './characters'
 import { CHAR_FRAME_W, CHAR_FRAME_H } from './spriteLoader'
+import { BOARD_COL, DASH_COL } from './worldState'
 
 const OX = SCENE_PAD_L * TILE_SIZE  // 32 px
 const OY = SCENE_PAD_T * TILE_SIZE  // 96 px
@@ -80,20 +81,26 @@ export function hitTest(
     }
   }
 
-  // 2. Bulletin board — 5×3 tiles, top-left = (OX, OY − TILE_SIZE)
-  if (
-    logicalX >= OX && logicalX <= OX + 5 * TILE_SIZE &&
-    logicalY >= OY - TILE_SIZE && logicalY <= OY + 2 * TILE_SIZE
-  ) {
-    return { kind: 'board' }
+  // 2. Bulletin board — 5×3 tiles, top-left = (OX + BOARD_COL*TILE, OY − TILE_SIZE)
+  {
+    const bx = OX + BOARD_COL * TILE_SIZE
+    if (
+      logicalX >= bx && logicalX <= bx + 5 * TILE_SIZE &&
+      logicalY >= OY - TILE_SIZE && logicalY <= OY + 2 * TILE_SIZE
+    ) {
+      return { kind: 'board' }
+    }
   }
 
-  // 3. Dashboard — 5×3 tiles, top-left = (OX + 6*TILE_SIZE, OY − TILE_SIZE)
-  if (
-    logicalX >= OX + 6 * TILE_SIZE && logicalX <= OX + 11 * TILE_SIZE &&
-    logicalY >= OY - TILE_SIZE && logicalY <= OY + 2 * TILE_SIZE
-  ) {
-    return { kind: 'dashboard' }
+  // 3. Dashboard — 5×3 tiles, top-left = (OX + DASH_COL*TILE, OY − TILE_SIZE)
+  {
+    const dx = OX + DASH_COL * TILE_SIZE
+    if (
+      logicalX >= dx && logicalX <= dx + 5 * TILE_SIZE &&
+      logicalY >= OY - TILE_SIZE && logicalY <= OY + 2 * TILE_SIZE
+    ) {
+      return { kind: 'dashboard' }
+    }
   }
 
   // 4. Decorations — reverse order so topmost (last-drawn) wins

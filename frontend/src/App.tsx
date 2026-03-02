@@ -84,9 +84,20 @@ function App() {
         </p>
       )}
 
-      {/* Pixel Scene */}
-      <div style={{ marginBottom: '1.5rem' }}>
-        <OfficeScene ref={sceneRef} onSelect={handleSelect} />
+      {/* Main area: Canvas (left) + Agent Cards (right) */}
+      <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', alignItems: 'flex-start' }}>
+        {/* Pixel Scene */}
+        <div style={{ flexShrink: 0 }}>
+          <OfficeScene ref={sceneRef} onSelect={handleSelect} />
+        </div>
+
+        {/* Agent Cards — vertical stack */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', minWidth: 220 }}>
+          <h3 style={{ margin: 0, fontSize: '0.9rem', color: '#aaa' }}>Agents</h3>
+          {agents.map((agent) => (
+            <AgentCard key={agent.id} agent={agent} onStatusChange={handleStatusChange} />
+          ))}
+        </div>
       </div>
 
       {/* Manual Walk Controls */}
@@ -132,14 +143,6 @@ function App() {
         >
           走過去
         </button>
-      </div>
-
-      {/* Agent Cards */}
-      <h2 style={{ marginBottom: '0.75rem' }}>Agents</h2>
-      <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-        {agents.map((agent) => (
-          <AgentCard key={agent.id} agent={agent} onStatusChange={handleStatusChange} />
-        ))}
       </div>
       {/* Board Modal */}
       <BoardModal open={boardOpen} onClose={() => setBoardOpen(false)} />
