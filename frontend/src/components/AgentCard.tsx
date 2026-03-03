@@ -23,6 +23,8 @@ export interface Agent {
   emoji: string
   model: string
   lastSeenAt: string
+  col?: number
+  row?: number
 }
 
 /** Extra data optionally passed from dashboard summary */

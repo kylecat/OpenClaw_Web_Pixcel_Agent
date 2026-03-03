@@ -6,7 +6,8 @@ let socket: Socket | null = null
 
 function getSocket(): Socket {
   if (!socket) {
-    socket = io({ transports: ['websocket', 'polling'] })
+    // WebSocket only — Fastify doesn't handle Socket.IO polling transport
+    socket = io({ transports: ['websocket'] })
   }
   return socket
 }
