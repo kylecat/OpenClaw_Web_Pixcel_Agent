@@ -12,6 +12,8 @@ import {
 interface BoardModalProps {
   open: boolean
   onClose: () => void
+  /** Incremented by App when a WebSocket board:changed event is received */
+  boardVersion?: number
 }
 
 /* ================================================================== */
@@ -41,7 +43,7 @@ const LEVEL_COLOR: Record<string, string> = {
 /*  BoardModal                                                         */
 /* ================================================================== */
 
-export function BoardModal({ open, onClose }: BoardModalProps) {
+export function BoardModal({ open, onClose, boardVersion }: BoardModalProps) {
   const [tab, setTab] = useState<'tasks' | 'alerts'>('tasks')
   const [tasks, setTasks] = useState<TaskItem[]>([])
   const [alerts, setAlerts] = useState<AlertItem[]>([])
@@ -65,6 +67,11 @@ export function BoardModal({ open, onClose }: BoardModalProps) {
   useEffect(() => {
     if (open) reload()
   }, [open, reload])
+
+  // Re-fetch when another client mutates board data (via WebSocket)
+  useEffect(() => {
+    if (open && boardVersion) reload()
+  }, [boardVersion]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!open) return
@@ -90,7 +97,7 @@ export function BoardModal({ open, onClose }: BoardModalProps) {
       <div style={{
         background: '#1e1e2e', border: '1px solid #444', borderRadius: 12,
         color: '#eee', fontFamily: 'monospace',
-        width: 720, maxHeight: '80vh', display: 'flex', flexDirection: 'column',
+        width: 864, maxHeight: '80vh', display: 'flex', flexDirection: 'column',
       }}>
         {/* Header */}
         <div style={{

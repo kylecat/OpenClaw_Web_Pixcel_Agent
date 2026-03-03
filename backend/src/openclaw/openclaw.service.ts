@@ -11,6 +11,7 @@ import type {
   OpenClawCronJob,
   OpenClawCronRun,
 } from './openclaw.dto.js'
+import { EventsGateway } from '../events/events.gateway.js'
 
 const execAsync = promisify(exec)
 
@@ -28,6 +29,8 @@ export class OpenClawService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(OpenClawService.name)
   private timer: ReturnType<typeof setInterval> | null = null
   private cached: OpenClawData | null = null
+
+  constructor(private readonly events: EventsGateway) {}
 
   /* ---------------------------------------------------------------- */
   /*  Lifecycle                                                        */
@@ -121,6 +124,9 @@ export class OpenClawService implements OnModuleInit, OnModuleDestroy {
         `Poll OK — ${this.cached.sessions.length} sessions, ` +
         `${cronJobs.length} cron jobs`,
       )
+
+      // Notify all connected clients that dashboard data is stale
+      this.events.emitDashboardStale()
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       this.logger.error(`Poll cycle failed: ${msg}`)

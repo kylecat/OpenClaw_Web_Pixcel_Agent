@@ -5,10 +5,14 @@ import { CreateTaskDto } from './dto/create-task.dto.js'
 import { UpdateTaskDto } from './dto/update-task.dto.js'
 import { CreateAlertDto } from './dto/create-alert.dto.js'
 import { UpdateAlertDto } from './dto/update-alert.dto.js'
+import { EventsGateway } from '../events/events.gateway.js'
 
 @Controller('board')
 export class BoardController {
-  constructor(private readonly boardService: BoardService) {}
+  constructor(
+    private readonly boardService: BoardService,
+    private readonly events: EventsGateway,
+  ) {}
 
   /* ---------- Tasks ---------- */
 
@@ -23,21 +27,26 @@ export class BoardController {
   }
 
   @Post('tasks')
-  createTask(@Body() dto: CreateTaskDto): Promise<TaskItem> {
-    return this.boardService.createTask(dto)
+  async createTask(@Body() dto: CreateTaskDto): Promise<TaskItem> {
+    const task = await this.boardService.createTask(dto)
+    this.events.emitBoardChanged()
+    return task
   }
 
   @Patch('tasks/:id')
-  updateTask(
+  async updateTask(
     @Param('id') id: string,
     @Body() dto: UpdateTaskDto,
   ): Promise<TaskItem> {
-    return this.boardService.updateTask(id, dto)
+    const task = await this.boardService.updateTask(id, dto)
+    this.events.emitBoardChanged()
+    return task
   }
 
   @Delete('tasks/:id')
-  deleteTask(@Param('id') id: string): Promise<void> {
-    return this.boardService.deleteTask(id)
+  async deleteTask(@Param('id') id: string): Promise<void> {
+    await this.boardService.deleteTask(id)
+    this.events.emitBoardChanged()
   }
 
   /* ---------- Alerts ---------- */
@@ -53,20 +62,25 @@ export class BoardController {
   }
 
   @Post('alerts')
-  createAlert(@Body() dto: CreateAlertDto): Promise<AlertItem> {
-    return this.boardService.createAlert(dto)
+  async createAlert(@Body() dto: CreateAlertDto): Promise<AlertItem> {
+    const alert = await this.boardService.createAlert(dto)
+    this.events.emitBoardChanged()
+    return alert
   }
 
   @Patch('alerts/:id')
-  updateAlert(
+  async updateAlert(
     @Param('id') id: string,
     @Body() dto: UpdateAlertDto,
   ): Promise<AlertItem> {
-    return this.boardService.updateAlert(id, dto)
+    const alert = await this.boardService.updateAlert(id, dto)
+    this.events.emitBoardChanged()
+    return alert
   }
 
   @Delete('alerts/:id')
-  deleteAlert(@Param('id') id: string): Promise<void> {
-    return this.boardService.deleteAlert(id)
+  async deleteAlert(@Param('id') id: string): Promise<void> {
+    await this.boardService.deleteAlert(id)
+    this.events.emitBoardChanged()
   }
 }
