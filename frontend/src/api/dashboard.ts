@@ -29,10 +29,60 @@ export interface HostMetrics {
   uptime: number
 }
 
+/* ------------------------------------------------------------------ */
+/*  OpenClaw sections (T7)                                             */
+/* ------------------------------------------------------------------ */
+
+export interface SessionInfo {
+  key: string
+  kind: string
+  age: string
+  model: string
+  tokens: string
+}
+
+export interface CronJobInfo {
+  id: string
+  name: string
+  schedule: string
+  next: string
+  last: string
+  status: string
+  target: string
+  agentId: string
+  model: string
+}
+
+export interface CronRunInfo {
+  ts: number
+  status: string
+  summary?: string
+  error?: string
+  durationMs: number
+  model: string
+  provider: string
+  usage: { input_tokens: number; output_tokens: number; total_tokens: number }
+  deliveryStatus: string
+}
+
+export interface OpenClawInfo {
+  sessions: SessionInfo[]
+  cronJobs: CronJobInfo[]
+  cronRuns: Record<string, CronRunInfo[]>
+  channels: { channel: string; enabled: string; state: string; detail: string }[]
+  security: { summary: string }
+  fetchedAt: string
+}
+
+/* ------------------------------------------------------------------ */
+/*  Combined Summary                                                   */
+/* ------------------------------------------------------------------ */
+
 export interface DashboardSummary {
   gateway: GatewayStatus
   agents: AgentOverview[]
   host: HostMetrics
+  openclaw: OpenClawInfo | null
   lastUpdated: string
 }
 
