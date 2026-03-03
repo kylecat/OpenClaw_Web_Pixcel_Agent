@@ -3,10 +3,12 @@ import { AgentCard } from './components/AgentCard'
 import { OfficeScene } from './components/OfficeScene'
 import { BoardModal } from './components/BoardModal'
 import { DashboardModal } from './components/DashboardModal'
-import type { Agent } from './components/AgentCard'
+import type { Agent, AgentRpgData } from './components/AgentCard'
 import type { OfficeSceneHandle, WalkTarget } from './components/OfficeScene'
 import type { SelectedObject } from './scene/types'
 import { COLS, ROWS } from './scene/worldState'
+import { fetchDashboardSummary, type DashboardSummary } from './api/dashboard'
+import { useSocket } from './hooks/useSocket'
 
 interface HealthResponse {
   status: string
@@ -28,6 +30,7 @@ function App() {
   const [healthError, setHealthError] = useState(false)
   const [agents, setAgents] = useState<Agent[]>([])
   const sceneRef = useRef<OfficeSceneHandle>(null)
+  const socket = useSocket()
 
   // Board modal
   const [boardOpen, setBoardOpen] = useState(false)
@@ -39,10 +42,16 @@ function App() {
     if (obj?.kind === 'dashboard') setDashboardOpen(true)
   }, [])
 
+  // Dashboard summary for RPG card data
+  const [dashSummary, setDashSummary] = useState<DashboardSummary | null>(null)
+
   // Manual walk controls
   const [selectedAgent, setSelectedAgent] = useState<string>('gaia')
   const [targetCol, setTargetCol] = useState<number>(0)
   const [targetRow, setTargetRow] = useState<number>(0)
+
+  // Board change signal (incremented on each board:changed event)
+  const [boardVersion, setBoardVersion] = useState(0)
 
   useEffect(() => {
     fetch('/api/health')
@@ -54,28 +63,74 @@ function App() {
       .then((res) => res.json() as Promise<Agent[]>)
       .then(setAgents)
       .catch(console.error)
+
+    // Fetch dashboard summary for RPG card token data
+    fetchDashboardSummary().then(setDashSummary).catch(console.error)
   }, [])
 
+  // --- WebSocket listeners ---
+  useEffect(() => {
+    // Agent status changed → update state + walk character
+    const onAgentStatus = (agent: Agent) => {
+      setAgents((prev) => prev.map((a) => (a.id === agent.id ? agent : a)))
+      const target = STATUS_WALK_MAP[agent.status] ?? 'home'
+      sceneRef.current?.walkAgent(agent.id, target)
+      sceneRef.current?.setStatusEmoji(agent.id, agent.emoji)
+    }
+
+    // Manual walk broadcast from another client
+    const onAgentWalk = (data: { agentId: string; col: number; row: number }) => {
+      sceneRef.current?.walkToTile(data.agentId, data.col, data.row)
+    }
+
+    // Board data changed → signal modals to refresh
+    const onBoardChanged = () => {
+      setBoardVersion((v) => v + 1)
+    }
+
+    // Dashboard data refreshed on backend → re-fetch summary
+    const onDashboardStale = () => {
+      fetchDashboardSummary().then(setDashSummary).catch(console.error)
+    }
+
+    socket.on('agent:statusChanged', onAgentStatus)
+    socket.on('agent:walk', onAgentWalk)
+    socket.on('board:changed', onBoardChanged)
+    socket.on('dashboard:stale', onDashboardStale)
+
+    return () => {
+      socket.off('agent:statusChanged', onAgentStatus)
+      socket.off('agent:walk', onAgentWalk)
+      socket.off('board:changed', onBoardChanged)
+      socket.off('dashboard:stale', onDashboardStale)
+    }
+  }, [socket])
+
+  // Build RPG data map from dashboard summary
+  const rpgDataMap: Record<string, AgentRpgData> = {}
+  if (dashSummary) {
+    for (const a of dashSummary.agents) {
+      rpgDataMap[a.id] = {
+        tokenToday: a.tokenUsage.today,
+        tokenTotal: a.tokenUsage.total,
+        tokenCap: Math.max(a.tokenUsage.total, 300_000),
+      }
+    }
+  }
+
   const handleStatusChange = useCallback((id: string, status: string) => {
+    // PATCH triggers backend broadcast via WebSocket → all clients update
     fetch(`/api/agents/${id}/status`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status }),
-    })
-      .then((res) => res.json() as Promise<Agent>)
-      .then((updated) => {
-        setAgents((prev) => prev.map((a) => (a.id === updated.id ? updated : a)))
-        // Sync scene: walk + status emoji
-        const target = STATUS_WALK_MAP[updated.status] ?? 'home'
-        sceneRef.current?.walkAgent(updated.id, target)
-        sceneRef.current?.setStatusEmoji(updated.id, updated.emoji)
-      })
-      .catch(console.error)
+    }).catch(console.error)
   }, [])
 
   const handleManualWalk = useCallback(() => {
-    sceneRef.current?.walkToTile(selectedAgent, targetCol, targetRow)
-  }, [selectedAgent, targetCol, targetRow])
+    // Emit walk via WebSocket → backend rebroadcasts to all clients
+    socket.emit('agent:walk', { agentId: selectedAgent, col: targetCol, row: targetRow })
+  }, [socket, selectedAgent, targetCol, targetRow])
 
   return (
     <div style={{ fontFamily: 'monospace', padding: '2rem', background: '#111', minHeight: '100vh', color: '#eee' }}>
@@ -96,10 +151,10 @@ function App() {
         </div>
 
         {/* Agent Cards — vertical stack */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', minWidth: 220 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', minWidth: 380 }}>
           <h3 style={{ margin: 0, fontSize: '0.9rem', color: '#aaa' }}>Agents</h3>
           {agents.map((agent) => (
-            <AgentCard key={agent.id} agent={agent} onStatusChange={handleStatusChange} />
+            <AgentCard key={agent.id} agent={agent} rpg={rpgDataMap[agent.id]} onStatusChange={handleStatusChange} />
           ))}
         </div>
       </div>
@@ -149,9 +204,9 @@ function App() {
         </button>
       </div>
       {/* Board Modal */}
-      <BoardModal open={boardOpen} onClose={() => setBoardOpen(false)} />
+      <BoardModal open={boardOpen} onClose={() => setBoardOpen(false)} boardVersion={boardVersion} />
       {/* Dashboard Modal */}
-      <DashboardModal open={dashboardOpen} onClose={() => setDashboardOpen(false)} />
+      <DashboardModal open={dashboardOpen} onClose={() => setDashboardOpen(false)} socket={socket} />
     </div>
   )
 }

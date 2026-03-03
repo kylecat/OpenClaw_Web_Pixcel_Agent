@@ -10,9 +10,13 @@ import {
 /*  Props                                                              */
 /* ================================================================== */
 
+import type { Socket } from 'socket.io-client'
+
 interface DashboardModalProps {
   open: boolean
   onClose: () => void
+  /** Socket.IO instance for real-time updates */
+  socket?: Socket
 }
 
 /* ================================================================== */
@@ -39,7 +43,7 @@ const AGENT_STATUS_COLOR: Record<string, string> = {
 /*  DashboardModal                                                     */
 /* ================================================================== */
 
-export function DashboardModal({ open, onClose }: DashboardModalProps) {
+export function DashboardModal({ open, onClose, socket }: DashboardModalProps) {
   const [data, setData] = useState<DashboardSummary | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -61,6 +65,14 @@ export function DashboardModal({ open, onClose }: DashboardModalProps) {
   useEffect(() => {
     if (open) reload()
   }, [open, reload])
+
+  // Auto-refresh when backend pushes new dashboard data (via WebSocket)
+  useEffect(() => {
+    if (!open || !socket) return
+    const onStale = () => reload()
+    socket.on('dashboard:stale', onStale)
+    return () => { socket.off('dashboard:stale', onStale) }
+  }, [open, socket, reload])
 
   useEffect(() => {
     if (!open) return
@@ -86,7 +98,7 @@ export function DashboardModal({ open, onClose }: DashboardModalProps) {
       <div style={{
         background: '#1e1e2e', border: '1px solid #444', borderRadius: 12,
         color: '#eee', fontFamily: 'monospace',
-        width: 720, maxHeight: '80vh', display: 'flex', flexDirection: 'column',
+        width: 864, maxHeight: '80vh', display: 'flex', flexDirection: 'column',
       }}>
         {/* Header */}
         <div style={{
