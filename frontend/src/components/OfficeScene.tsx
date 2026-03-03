@@ -33,6 +33,8 @@ export interface OfficeSceneHandle {
 
 export interface OfficeSceneProps {
   onSelect?: (obj: SelectedObject | null) => void
+  /** Called when a character is walked to a tile via canvas click (for WebSocket sync) */
+  onWalk?: (agentId: string, col: number, row: number) => void
 }
 
 // Canvas includes transparent padding so characters near the edges aren't clipped
@@ -42,7 +44,7 @@ const CANVAS_H = (ROWS + SCENE_PAD_T + SCENE_PAD_B) * TILE_SIZE  // 14 tiles tal
 // Canvas is displayed at this fraction of its logical size
 const CSS_SCALE = 0.64
 
-export const OfficeScene = forwardRef<OfficeSceneHandle, OfficeSceneProps>(({ onSelect }, ref) => {
+export const OfficeScene = forwardRef<OfficeSceneHandle, OfficeSceneProps>(({ onSelect, onWalk }, ref) => {
   const canvasRef    = useRef<HTMLCanvasElement>(null)
   const worldRef     = useRef<WorldState>(createWorldState())
   const spritesRef   = useRef<Sprites | null>(null)
@@ -50,6 +52,8 @@ export const OfficeScene = forwardRef<OfficeSceneHandle, OfficeSceneProps>(({ on
   const pendingTileRef = useRef<{ col: number; row: number } | null>(null)
   const onSelectRef    = useRef(onSelect)
   onSelectRef.current  = onSelect
+  const onWalkRef      = useRef(onWalk)
+  onWalkRef.current    = onWalk
 
   const walkAgent = useCallback((agentId: string, target: WalkTarget) => {
     const ch = worldRef.current.characters.get(agentId)
@@ -152,9 +156,12 @@ export const OfficeScene = forwardRef<OfficeSceneHandle, OfficeSceneProps>(({ on
           const pending = pendingTileRef.current
           if (pending && pending.col === tile.col && pending.row === tile.row) {
             // Second click on the same tile → confirm, walk there
-            const ch = worldRef.current.characters.get(selectedRef.current.id)
+            const agentId = selectedRef.current.id
+            const ch = worldRef.current.characters.get(agentId)
             if (ch) {
               walkToTarget(ch, tile.col, tile.row, worldRef.current.grid, worldRef.current.blockedTiles)
+              // Broadcast to other clients via WebSocket
+              onWalkRef.current?.(agentId, tile.col, tile.row)
             }
             pendingTileRef.current = null
           } else {

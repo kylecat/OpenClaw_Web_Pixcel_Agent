@@ -38,9 +38,25 @@ function App() {
   const [dashboardOpen, setDashboardOpen] = useState(false)
 
   const handleSelect = useCallback((obj: SelectedObject | null) => {
-    if (obj?.kind === 'board') setBoardOpen(true)
-    if (obj?.kind === 'dashboard') setDashboardOpen(true)
-  }, [])
+    if (obj?.kind === 'board') {
+      setBoardOpen(true)
+      socket.emit('modal:toggled', { modal: 'board', open: true })
+    }
+    if (obj?.kind === 'dashboard') {
+      setDashboardOpen(true)
+      socket.emit('modal:toggled', { modal: 'dashboard', open: true })
+    }
+  }, [socket])
+
+  const closeBoardModal = useCallback(() => {
+    setBoardOpen(false)
+    socket.emit('modal:toggled', { modal: 'board', open: false })
+  }, [socket])
+
+  const closeDashboardModal = useCallback(() => {
+    setDashboardOpen(false)
+    socket.emit('modal:toggled', { modal: 'dashboard', open: false })
+  }, [socket])
 
   // Dashboard summary for RPG card data
   const [dashSummary, setDashSummary] = useState<DashboardSummary | null>(null)
@@ -68,6 +84,42 @@ function App() {
     fetchDashboardSummary().then(setDashSummary).catch(console.error)
   }, [])
 
+  // Sync helper: fetch agents from server, walk characters if status differs
+  const syncAgentsFromServer = useCallback(() => {
+    fetch('/api/agents')
+      .then((res) => res.json() as Promise<Agent[]>)
+      .then((latest) => {
+        setAgents((prev) => {
+          for (const agent of latest) {
+            const old = prev.find((a) => a.id === agent.id)
+            if (old && old.status !== agent.status) {
+              const target = STATUS_WALK_MAP[agent.status] ?? 'home'
+              sceneRef.current?.walkAgent(agent.id, target)
+              sceneRef.current?.setStatusEmoji(agent.id, agent.emoji)
+            }
+          }
+          return latest
+        })
+      })
+      .catch(console.error)
+    fetchDashboardSummary().then(setDashSummary).catch(console.error)
+  }, [])
+
+  // Periodic sync: re-fetch agents + dashboard every 5s as fallback
+  useEffect(() => {
+    const timer = setInterval(syncAgentsFromServer, 5_000)
+    return () => clearInterval(timer)
+  }, [syncAgentsFromServer])
+
+  // Re-sync immediately when tab becomes visible (rAF is paused in background)
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') syncAgentsFromServer()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [syncAgentsFromServer])
+
   // --- WebSocket listeners ---
   useEffect(() => {
     // Agent status changed → update state + walk character
@@ -93,18 +145,40 @@ function App() {
       fetchDashboardSummary().then(setDashSummary).catch(console.error)
     }
 
+    // Modal open/close from another client
+    const onModalToggled = (data: { modal: 'board' | 'dashboard'; open: boolean }) => {
+      if (data.modal === 'board') setBoardOpen(data.open)
+      if (data.modal === 'dashboard') setDashboardOpen(data.open)
+    }
+
     socket.on('agent:statusChanged', onAgentStatus)
     socket.on('agent:walk', onAgentWalk)
     socket.on('board:changed', onBoardChanged)
     socket.on('dashboard:stale', onDashboardStale)
+    socket.on('modal:toggled', onModalToggled)
 
     return () => {
       socket.off('agent:statusChanged', onAgentStatus)
       socket.off('agent:walk', onAgentWalk)
       socket.off('board:changed', onBoardChanged)
       socket.off('dashboard:stale', onDashboardStale)
+      socket.off('modal:toggled', onModalToggled)
     }
   }, [socket])
+
+  // Walk characters to their server-stored positions on first load
+  const initialPositionSynced = useRef(false)
+  useEffect(() => {
+    if (initialPositionSynced.current || agents.length === 0) return
+    if (!sceneRef.current) return
+    for (const agent of agents) {
+      if (agent.col != null && agent.row != null) {
+        sceneRef.current.walkToTile(agent.id, agent.col, agent.row)
+        sceneRef.current.setStatusEmoji(agent.id, agent.emoji)
+      }
+    }
+    initialPositionSynced.current = true
+  }, [agents])
 
   // Build RPG data map from dashboard summary
   const rpgDataMap: Record<string, AgentRpgData> = {}
@@ -127,8 +201,14 @@ function App() {
     }).catch(console.error)
   }, [])
 
+  // Canvas click-to-walk broadcasts to other clients
+  const handleCanvasWalk = useCallback((agentId: string, col: number, row: number) => {
+    socket.emit('agent:walk', { agentId, col, row })
+  }, [socket])
+
   const handleManualWalk = useCallback(() => {
-    // Emit walk via WebSocket → backend rebroadcasts to all clients
+    // Walk locally (immediate) + broadcast to other clients via WebSocket
+    sceneRef.current?.walkToTile(selectedAgent, targetCol, targetRow)
     socket.emit('agent:walk', { agentId: selectedAgent, col: targetCol, row: targetRow })
   }, [socket, selectedAgent, targetCol, targetRow])
 
@@ -147,7 +227,7 @@ function App() {
       <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', alignItems: 'flex-start' }}>
         {/* Pixel Scene */}
         <div style={{ flexShrink: 0 }}>
-          <OfficeScene ref={sceneRef} onSelect={handleSelect} />
+          <OfficeScene ref={sceneRef} onSelect={handleSelect} onWalk={handleCanvasWalk} />
         </div>
 
         {/* Agent Cards — vertical stack */}
@@ -204,9 +284,9 @@ function App() {
         </button>
       </div>
       {/* Board Modal */}
-      <BoardModal open={boardOpen} onClose={() => setBoardOpen(false)} boardVersion={boardVersion} />
+      <BoardModal open={boardOpen} onClose={closeBoardModal} boardVersion={boardVersion} />
       {/* Dashboard Modal */}
-      <DashboardModal open={dashboardOpen} onClose={() => setDashboardOpen(false)} socket={socket} />
+      <DashboardModal open={dashboardOpen} onClose={closeDashboardModal} socket={socket} />
     </div>
   )
 }

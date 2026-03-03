@@ -70,6 +70,14 @@ export function walkToTarget(
   grid: GridTile[][],
   blocked: Set<string> = new Set(),
 ): void {
+  // Skip if already walking to the same destination (avoids stutter from redundant calls)
+  if (ch.state === 'WALK' && ch.path.length > 0) {
+    const dest = ch.path[ch.path.length - 1]
+    if (dest.col === targetCol && dest.row === targetRow) return
+  }
+  // Skip if already at the target
+  if (ch.col === targetCol && ch.row === targetRow && ch.state === 'IDLE') return
+
   const path = findPath(ch.col, ch.row, targetCol, targetRow, grid, blocked)
   if (path.length > 0) {
     ch.path = path
