@@ -1,5 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
-import { fetchDashboardSummary, type DashboardSummary } from '../api/dashboard'
+import {
+  fetchDashboardSummary,
+  type DashboardSummary,
+  type OpenClawInfo,
+  type CronRunInfo,
+} from '../api/dashboard'
 
 /* ================================================================== */
 /*  Props                                                              */
@@ -81,7 +86,7 @@ export function DashboardModal({ open, onClose }: DashboardModalProps) {
       <div style={{
         background: '#1e1e2e', border: '1px solid #444', borderRadius: 12,
         color: '#eee', fontFamily: 'monospace',
-        width: 640, maxHeight: '80vh', display: 'flex', flexDirection: 'column',
+        width: 720, maxHeight: '80vh', display: 'flex', flexDirection: 'column',
       }}>
         {/* Header */}
         <div style={{
@@ -115,11 +120,16 @@ export function DashboardModal({ open, onClose }: DashboardModalProps) {
             <>
               <GatewaySection gateway={data.gateway} />
               <AgentsSection agents={data.agents} />
+              {data.openclaw && <SessionsSection sessions={data.openclaw.sessions} />}
+              {data.openclaw && <CronSection openclaw={data.openclaw} />}
               <HostSection host={data.host} />
 
               {/* Last Updated */}
               <div style={{ textAlign: 'right', fontSize: 11, color: '#666', marginTop: 12 }}>
                 Last updated: {new Date(data.lastUpdated).toLocaleString()}
+                {data.openclaw && (
+                  <span> | OpenClaw fetched: {new Date(data.openclaw.fetchedAt).toLocaleTimeString()}</span>
+                )}
               </div>
             </>
           )}
@@ -228,6 +238,169 @@ function HostSection({ host }: { host: DashboardSummary['host'] }) {
 }
 
 /* ================================================================== */
+/*  Sessions Section (OpenClaw)                                        */
+/* ================================================================== */
+
+function SessionsSection({ sessions }: { sessions: OpenClawInfo['sessions'] }) {
+  if (sessions.length === 0) return null
+  return (
+    <div style={sectionStyle}>
+      <div style={sectionHeader}>Sessions</div>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={tableStyle}>
+          <thead>
+            <tr>
+              <th style={thStyle}>Key</th>
+              <th style={thStyle}>Kind</th>
+              <th style={thStyle}>Age</th>
+              <th style={thStyle}>Model</th>
+              <th style={thStyle}>Tokens</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sessions.map((s, i) => (
+              <tr key={i}>
+                <td style={tdStyle} title={s.key}>
+                  {s.key.length > 32 ? s.key.slice(0, 30) + '...' : s.key}
+                </td>
+                <td style={tdStyle}>{s.kind}</td>
+                <td style={tdStyle}>{s.age}</td>
+                <td style={tdStyle}>{s.model}</td>
+                <td style={tdStyle}>{s.tokens}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+/* ================================================================== */
+/*  Cron Jobs Section (OpenClaw)                                       */
+/* ================================================================== */
+
+const CRON_STATUS_COLOR: Record<string, string> = {
+  ok: '#27ae60',
+  error: '#e74c3c',
+  running: '#3498db',
+}
+
+function CronSection({ openclaw }: { openclaw: OpenClawInfo }) {
+  const { cronJobs, cronRuns } = openclaw
+  const [expandedJob, setExpandedJob] = useState<string | null>(null)
+
+  if (cronJobs.length === 0) return null
+
+  return (
+    <div style={sectionStyle}>
+      <div style={sectionHeader}>Cron Jobs</div>
+      {cronJobs.map(job => {
+        const runs = cronRuns[job.id] ?? []
+        const isExpanded = expandedJob === job.id
+
+        return (
+          <div key={job.id} style={{
+            border: '1px solid #333', borderRadius: 6,
+            marginBottom: 8, background: '#1e1e2e',
+          }}>
+            {/* Job header */}
+            <div
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '8px 10px', cursor: 'pointer',
+              }}
+              onClick={() => setExpandedJob(isExpanded ? null : job.id)}
+            >
+              <span style={{ fontSize: 11, color: '#666' }}>{isExpanded ? '▼' : '▶'}</span>
+              <span style={{ fontSize: 12, fontWeight: 'bold', flex: 1 }}>
+                {job.name || job.id.slice(0, 8)}
+              </span>
+              <span style={badge(CRON_STATUS_COLOR[job.status] ?? '#888')}>{job.status}</span>
+              <InfoPair label="agent" value={job.agentId} />
+              <InfoPair label="next" value={job.next} />
+              <InfoPair label="last" value={job.last} />
+            </div>
+
+            {/* Expanded: schedule + recent runs */}
+            {isExpanded && (
+              <div style={{ padding: '0 10px 10px', borderTop: '1px solid #333' }}>
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 8, marginBottom: 8 }}>
+                  <InfoPair label="schedule" value={job.schedule} />
+                  <InfoPair label="target" value={job.target} />
+                  <InfoPair label="model" value={job.model || '-'} />
+                </div>
+
+                {runs.length > 0 && (
+                  <>
+                    <div style={{ fontSize: 11, color: '#888', marginBottom: 4 }}>Recent Runs</div>
+                    {runs.map((run, i) => (
+                      <CronRunRow key={i} run={run} />
+                    ))}
+                  </>
+                )}
+                {runs.length === 0 && (
+                  <div style={{ fontSize: 11, color: '#666' }}>No recent runs</div>
+                )}
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function CronRunRow({ run }: { run: CronRunInfo }) {
+  const [showSummary, setShowSummary] = useState(false)
+  const color = CRON_STATUS_COLOR[run.status] ?? '#888'
+  const durSec = Math.round(run.durationMs / 1000)
+  const time = new Date(run.ts).toLocaleString()
+
+  return (
+    <div style={{
+      borderBottom: '1px solid #2a2a3a', padding: '4px 0',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <span style={{
+          width: 8, height: 8, borderRadius: '50%', background: color,
+          display: 'inline-block', flexShrink: 0,
+        }} />
+        <span style={{ fontSize: 11, color: '#aaa' }}>{time}</span>
+        <span style={{ fontSize: 10, color }}>{run.status}</span>
+        <InfoPair label="duration" value={`${durSec}s`} />
+        <InfoPair label="model" value={run.model} />
+        <InfoPair label="tokens" value={`${run.usage.total_tokens.toLocaleString()}`} />
+        <InfoPair label="delivery" value={run.deliveryStatus} />
+        {(run.summary || run.error) && (
+          <button
+            onClick={() => setShowSummary(!showSummary)}
+            style={{
+              background: 'none', border: '1px solid #444', color: '#aaa',
+              fontSize: 10, borderRadius: 3, padding: '1px 6px', cursor: 'pointer',
+            }}
+          >
+            {showSummary ? 'hide' : 'detail'}
+          </button>
+        )}
+      </div>
+      {showSummary && (run.summary || run.error) && (
+        <div style={{
+          marginTop: 4, padding: 8, background: '#1a1a2e', borderRadius: 4,
+          fontSize: 11, color: run.error ? '#e74c3c' : '#bbb',
+          maxHeight: 200, overflowY: 'auto', whiteSpace: 'pre-wrap',
+          lineHeight: 1.4,
+        }}>
+          {run.error || (run.summary && run.summary.length > 500
+            ? run.summary.slice(0, 500) + '...'
+            : run.summary)}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ================================================================== */
 /*  Shared components & helpers                                        */
 /* ================================================================== */
 
@@ -298,4 +471,20 @@ function badge(color: string): React.CSSProperties {
     background: color, borderRadius: 4, padding: '1px 6px',
     textTransform: 'uppercase',
   }
+}
+
+const tableStyle: React.CSSProperties = {
+  width: '100%', borderCollapse: 'collapse', fontSize: 11,
+}
+
+const thStyle: React.CSSProperties = {
+  textAlign: 'left', color: '#888', padding: '4px 6px',
+  borderBottom: '1px solid #333', fontWeight: 'normal',
+  whiteSpace: 'nowrap',
+}
+
+const tdStyle: React.CSSProperties = {
+  padding: '4px 6px', color: '#ccc',
+  borderBottom: '1px solid #2a2a3a',
+  whiteSpace: 'nowrap',
 }
