@@ -102,4 +102,10 @@ export interface SceneConfig {
   walkTargets: Record<string, { col: number; row: number }>
   /** Scene padding in tiles */
   padding: { left: number; right: number; top: number; bottom: number }
+  /** Override canvas logical width (for isometric scenes that don't follow grid*tileSize) */
+  canvasWidth?: number
+  /** Override canvas logical height */
+  canvasHeight?: number
+  /** Convert logical screen coords to grid tile (for isometric scenes). Falls back to orthogonal math. */
+  screenToGrid?: (logicalX: number, logicalY: number, cols: number, rows: number) => { col: number; row: number } | null
 }

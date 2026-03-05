@@ -1,19 +1,32 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AgentCard } from './components/AgentCard'
-import { OfficeScene } from './components/OfficeScene'
+import { SceneCanvas } from './components/SceneCanvas'
 import { BoardModal } from './components/BoardModal'
 import { DashboardModal } from './components/DashboardModal'
 import { ShelfModal } from './components/ShelfModal'
 import type { Agent, AgentRpgData } from './components/AgentCard'
-import type { OfficeSceneHandle, WalkTarget } from './components/OfficeScene'
+import type { SceneCanvasHandle, WalkTarget } from './components/SceneCanvas'
 import type { SelectedObject } from './scene/types'
-import { COLS, ROWS } from './scene/worldState'
+import { indoorConfig } from './scene/indoor/indoorConfig'
+import { outdoorConfig } from './scene/outdoor/outdoorConfig'
 import { fetchDashboardSummary, type DashboardSummary } from './api/dashboard'
 import { useSocket } from './hooks/useSocket'
+import { useSceneNavigation } from './hooks/useSceneNavigation'
 
 interface HealthResponse {
   status: string
   version: string
+}
+
+const SCENE_CONFIGS = {
+  indoor: indoorConfig,
+  outdoor: outdoorConfig,
+} as const
+
+// Default home tile per scene (for manual walk control defaults)
+const SCENE_HOME: Record<string, { col: number; row: number }> = {
+  indoor: { col: 6, row: 6 },
+  outdoor: { col: 8, row: 8 },
 }
 
 const STATUS_WALK_MAP: Record<string, WalkTarget> = {
@@ -26,12 +39,30 @@ const STATUS_WALK_MAP: Record<string, WalkTarget> = {
   DONE:             'home',
 }
 
+const FADE_MS = 400
+
 function App() {
   const [health, setHealth] = useState<HealthResponse | null>(null)
   const [healthError, setHealthError] = useState(false)
   const [agents, setAgents] = useState<Agent[]>([])
-  const sceneRef = useRef<OfficeSceneHandle>(null)
+  const sceneRef = useRef<SceneCanvasHandle>(null)
   const socket = useSocket()
+
+  // Scene navigation (each tab independent)
+  const sceneNav = useSceneNavigation('indoor')
+
+  const activeConfig = SCENE_CONFIGS[sceneNav.currentScene]
+
+  // Compute which agents are visible in the current scene
+  // undefined = agents not loaded yet → show all (no filtering)
+  const visibleAgents = useMemo(() => {
+    if (agents.length === 0) return undefined // not loaded yet, show all
+    const set = new Set<string>()
+    for (const a of agents) {
+      if ((a.scene ?? 'indoor') === sceneNav.currentScene) set.add(a.id)
+    }
+    return set
+  }, [agents, sceneNav.currentScene])
 
   // Board modal
   const [boardOpen, setBoardOpen] = useState(false)
@@ -41,7 +72,26 @@ function App() {
   const [shelfOpen, setShelfOpen] = useState(false)
   const [shelfId, setShelfId] = useState<'shelf1' | 'shelf2' | 'shelf3'>('shelf1')
 
+  // Move agent to another scene (local + backend + WebSocket)
+  const moveAgentToScene = useCallback((agentId: string, scene: 'indoor' | 'outdoor') => {
+    // Update local agent state immediately
+    setAgents((prev) => prev.map((a) => a.id === agentId ? { ...a, scene } : a))
+    // Persist to backend + broadcast to other tabs
+    fetch(`/api/agents/${agentId}/scene`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scene }),
+    }).catch(console.error)
+    socket.emit('agent:scene', { agentId, scene })
+  }, [socket])
+
+  // Ref to track the currently selected character (for scene transitions)
+  const selectedCharRef = useRef<string | null>(null)
+
   const handleSelect = useCallback((obj: SelectedObject | null) => {
+    // Track selected character for scene transitions
+    selectedCharRef.current = obj?.kind === 'character' ? obj.id : null
+
     if (obj?.kind === 'board') {
       setBoardOpen(true)
       socket.emit('modal:toggled', { modal: 'board', open: true })
@@ -50,19 +100,25 @@ function App() {
       setDashboardOpen(true)
       socket.emit('modal:toggled', { modal: 'dashboard', open: true })
     }
-    if (obj?.kind === 'exitDoor') {
-      console.log('[select] exit door clicked')
-      socket.emit('modal:toggled', { modal: 'exitDoor', open: true })
+    // Indoor exit/portal -> move selected agent to outdoor + switch view
+    if (obj?.kind === 'exitDoor' || obj?.kind === 'portal') {
+      if (selectedCharRef.current) {
+        moveAgentToScene(selectedCharRef.current, 'outdoor')
+      }
+      sceneNav.goTo('outdoor')
     }
-    if (obj?.kind === 'portal') {
-      console.log('[select] portal clicked')
-      socket.emit('modal:toggled', { modal: 'portal', open: true })
+    // Outdoor cabin -> move selected agent to indoor + switch view
+    if (obj?.kind === 'cabin') {
+      if (selectedCharRef.current) {
+        moveAgentToScene(selectedCharRef.current, 'indoor')
+      }
+      sceneNav.goTo('indoor')
     }
     if (obj?.kind === 'decoration' && (obj.decoKind === 'shelf1' || obj.decoKind === 'shelf2' || obj.decoKind === 'shelf3')) {
       setShelfId(obj.decoKind as 'shelf1' | 'shelf2' | 'shelf3')
       setShelfOpen(true)
     }
-  }, [socket])
+  }, [socket, sceneNav, moveAgentToScene])
 
   const closeBoardModal = useCallback(() => {
     setBoardOpen(false)
@@ -77,10 +133,17 @@ function App() {
   // Dashboard summary for RPG card data
   const [dashSummary, setDashSummary] = useState<DashboardSummary | null>(null)
 
-  // Manual walk controls
+  // Manual walk controls -- reset defaults on scene switch
   const [selectedAgent, setSelectedAgent] = useState<string>('gaia')
-  const [targetCol, setTargetCol] = useState<number>(0)
-  const [targetRow, setTargetRow] = useState<number>(0)
+  const [targetCol, setTargetCol] = useState<number>(SCENE_HOME.indoor.col)
+  const [targetRow, setTargetRow] = useState<number>(SCENE_HOME.indoor.row)
+  const prevSceneRef = useRef(sceneNav.currentScene)
+  if (prevSceneRef.current !== sceneNav.currentScene) {
+    prevSceneRef.current = sceneNav.currentScene
+    const home = SCENE_HOME[sceneNav.currentScene] ?? SCENE_HOME.indoor
+    setTargetCol(home.col)
+    setTargetRow(home.row)
+  }
 
   // Board change signal (incremented on each board:changed event)
   const [boardVersion, setBoardVersion] = useState(0)
@@ -96,7 +159,6 @@ function App() {
       .then(setAgents)
       .catch(console.error)
 
-    // Fetch dashboard summary for RPG card token data
     fetchDashboardSummary().then(setDashSummary).catch(console.error)
   }, [])
 
@@ -121,13 +183,12 @@ function App() {
     fetchDashboardSummary().then(setDashSummary).catch(console.error)
   }, [])
 
-  // Periodic sync: re-fetch agents + dashboard every 5s as fallback
+  // Periodic sync
   useEffect(() => {
     const timer = setInterval(syncAgentsFromServer, 5_000)
     return () => clearInterval(timer)
   }, [syncAgentsFromServer])
 
-  // Re-sync immediately when tab becomes visible (rAF is paused in background)
   useEffect(() => {
     const onVisible = () => {
       if (document.visibilityState === 'visible') syncAgentsFromServer()
@@ -138,7 +199,6 @@ function App() {
 
   // --- WebSocket listeners ---
   useEffect(() => {
-    // Agent status changed → update state + walk character
     const onAgentStatus = (agent: Agent) => {
       setAgents((prev) => prev.map((a) => (a.id === agent.id ? agent : a)))
       const target = STATUS_WALK_MAP[agent.status] ?? 'home'
@@ -146,22 +206,13 @@ function App() {
       sceneRef.current?.setStatusEmoji(agent.id, agent.emoji)
     }
 
-    // Manual walk broadcast from another client
     const onAgentWalk = (data: { agentId: string; col: number; row: number }) => {
       sceneRef.current?.walkToTile(data.agentId, data.col, data.row)
     }
 
-    // Board data changed → signal modals to refresh
-    const onBoardChanged = () => {
-      setBoardVersion((v) => v + 1)
-    }
+    const onBoardChanged = () => setBoardVersion((v) => v + 1)
+    const onDashboardStale = () => fetchDashboardSummary().then(setDashSummary).catch(console.error)
 
-    // Dashboard data refreshed on backend → re-fetch summary
-    const onDashboardStale = () => {
-      fetchDashboardSummary().then(setDashSummary).catch(console.error)
-    }
-
-    // Modal open/close from another client
     const onModalToggled = (data: { modal: 'board' | 'dashboard'; open: boolean }) => {
       if (data.modal === 'board') setBoardOpen(data.open)
       if (data.modal === 'dashboard') setDashboardOpen(data.open)
@@ -182,19 +233,20 @@ function App() {
     }
   }, [socket])
 
-  // Walk characters to their server-stored positions on first load
+  // Walk characters to their server-stored positions on first load (indoor only)
   const initialPositionSynced = useRef(false)
   useEffect(() => {
     if (initialPositionSynced.current || agents.length === 0) return
     if (!sceneRef.current) return
+    if (sceneNav.currentScene !== 'indoor') return
     for (const agent of agents) {
-      if (agent.col != null && agent.row != null) {
+      if (agent.col != null && agent.row != null && (agent.scene ?? 'indoor') === 'indoor') {
         sceneRef.current.walkToTile(agent.id, agent.col, agent.row)
         sceneRef.current.setStatusEmoji(agent.id, agent.emoji)
       }
     }
     initialPositionSynced.current = true
-  }, [agents])
+  }, [agents, sceneNav.currentScene])
 
   // Build RPG data map from dashboard summary
   const rpgDataMap: Record<string, AgentRpgData> = {}
@@ -209,7 +261,6 @@ function App() {
   }
 
   const handleStatusChange = useCallback((id: string, status: string) => {
-    // PATCH triggers backend broadcast via WebSocket → all clients update
     fetch(`/api/agents/${id}/status`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -217,16 +268,32 @@ function App() {
     }).catch(console.error)
   }, [])
 
-  // Canvas click-to-walk broadcasts to other clients
   const handleCanvasWalk = useCallback((agentId: string, col: number, row: number) => {
     socket.emit('agent:walk', { agentId, col, row })
   }, [socket])
 
   const handleManualWalk = useCallback(() => {
-    // Walk locally (immediate) + broadcast to other clients via WebSocket
     sceneRef.current?.walkToTile(selectedAgent, targetCol, targetRow)
     socket.emit('agent:walk', { agentId: selectedAgent, col: targetCol, row: targetRow })
   }, [socket, selectedAgent, targetCol, targetRow])
+
+  // Agent Card scene switch -> navigate to agent's scene
+  const handleSceneSwitch = useCallback((scene: 'indoor' | 'outdoor') => {
+    sceneNav.goTo(scene)
+  }, [sceneNav])
+
+  // Only show agents in current scene for manual walk dropdown
+  const agentsInScene = agents.filter((a) => (a.scene ?? 'indoor') === sceneNav.currentScene)
+
+  // Auto-select the first agent in the current scene when scene changes or agents move
+  const prevAgentsInSceneRef = useRef<string[]>([])
+  const agentIdsInScene = agentsInScene.map((a) => a.id)
+  if (agentIdsInScene.join(',') !== prevAgentsInSceneRef.current.join(',')) {
+    prevAgentsInSceneRef.current = agentIdsInScene
+    if (agentIdsInScene.length > 0 && !agentIdsInScene.includes(selectedAgent)) {
+      setSelectedAgent(agentIdsInScene[0])
+    }
+  }
 
   return (
     <div style={{ fontFamily: 'monospace', padding: '2rem', background: '#111', minHeight: '100vh', color: '#eee' }}>
@@ -241,31 +308,67 @@ function App() {
 
       {/* Main area: Canvas (left) + Agent Cards (right) */}
       <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', alignItems: 'flex-start' }}>
-        {/* Pixel Scene */}
-        <div style={{ flexShrink: 0 }}>
-          <OfficeScene ref={sceneRef} onSelect={handleSelect} onWalk={handleCanvasWalk} />
+        {/* Pixel Scene with fade transition */}
+        <div style={{ flexShrink: 0, position: 'relative' }}>
+          <div style={{
+            opacity: sceneNav.opacity,
+            transition: `opacity ${FADE_MS}ms ease-in-out`,
+          }}>
+            <SceneCanvas
+              key={`${sceneNav.currentScene}-${agents.length > 0 ? 'loaded' : 'init'}`}
+              ref={sceneRef}
+              config={activeConfig}
+              onSelect={handleSelect}
+              onWalk={handleCanvasWalk}
+              visibleAgents={visibleAgents}
+            />
+          </div>
+          {/* Scene indicator */}
+          <div style={{
+            position: 'absolute',
+            top: 8,
+            right: 8,
+            background: 'rgba(0,0,0,0.6)',
+            borderRadius: 4,
+            padding: '2px 8px',
+            fontSize: '0.75rem',
+            color: '#aaa',
+          }}>
+            {sceneNav.currentScene === 'indoor' ? 'Office' : 'Farm'}
+          </div>
         </div>
 
-        {/* Agent Cards — vertical stack */}
+        {/* Agent Cards -- vertical stack */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', minWidth: 380 }}>
           <h3 style={{ margin: 0, fontSize: '0.9rem', color: '#aaa' }}>Agents</h3>
           {agents.map((agent) => (
-            <AgentCard key={agent.id} agent={agent} rpg={rpgDataMap[agent.id]} onStatusChange={handleStatusChange} />
+            <AgentCard
+              key={agent.id}
+              agent={agent}
+              rpg={rpgDataMap[agent.id]}
+              onStatusChange={handleStatusChange}
+              currentScene={sceneNav.currentScene}
+              onSceneSwitch={handleSceneSwitch}
+            />
           ))}
         </div>
       </div>
 
       {/* Manual Walk Controls */}
       <div style={{ marginBottom: '1.5rem', padding: '0.75rem 1rem', background: '#1e1e2e', borderRadius: 8, display: 'inline-flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: '0.8rem', color: '#aaa' }}>手動移動</span>
+        <span style={{ fontSize: '0.8rem', color: '#aaa' }}>
+          {sceneNav.currentScene === 'indoor' ? 'Office' : 'Farm'}
+        </span>
 
         <select
           value={selectedAgent}
           onChange={(e) => setSelectedAgent(e.target.value)}
           style={{ fontFamily: 'monospace', background: '#2a2a3e', color: '#eee', border: '1px solid #444', borderRadius: 4, padding: '2px 6px' }}
         >
-          <option value="gaia">Gaia</option>
-          <option value="astraea">Astraea</option>
+          {agentsInScene.length > 0
+            ? agentsInScene.map((a) => <option key={a.id} value={a.id}>{a.displayName}</option>)
+            : <option disabled>No agents here</option>
+          }
         </select>
 
         <label style={{ fontSize: '0.8rem' }}>
@@ -273,7 +376,7 @@ function App() {
           <input
             type="number"
             min={0}
-            max={COLS - 1}
+            max={activeConfig.cols - 1}
             value={targetCol}
             onChange={(e) => setTargetCol(Number(e.target.value))}
             style={{ width: 44, fontFamily: 'monospace', background: '#2a2a3e', color: '#eee', border: '1px solid #444', borderRadius: 4, padding: '2px 4px' }}
@@ -285,7 +388,7 @@ function App() {
           <input
             type="number"
             min={0}
-            max={ROWS - 1}
+            max={activeConfig.rows - 1}
             value={targetRow}
             onChange={(e) => setTargetRow(Number(e.target.value))}
             style={{ width: 44, fontFamily: 'monospace', background: '#2a2a3e', color: '#eee', border: '1px solid #444', borderRadius: 4, padding: '2px 4px' }}
@@ -294,9 +397,34 @@ function App() {
 
         <button
           onClick={handleManualWalk}
+          disabled={agentsInScene.length === 0}
           style={{ fontFamily: 'monospace', background: '#3a6ea5', color: '#fff', border: 'none', borderRadius: 4, padding: '4px 12px', cursor: 'pointer' }}
         >
           走過去
+        </button>
+
+        {/* Scene switch button — moves selected agent + switches view */}
+        <button
+          onClick={() => {
+            const targetScene = sceneNav.currentScene === 'indoor' ? 'outdoor' : 'indoor'
+            if (selectedAgent) {
+              moveAgentToScene(selectedAgent, targetScene)
+            }
+            sceneNav.goTo(targetScene)
+          }}
+          disabled={sceneNav.transition !== 'idle' || agentsInScene.length === 0}
+          style={{
+            fontFamily: 'monospace',
+            background: sceneNav.currentScene === 'indoor' ? '#2e7d32' : '#5c6bc0',
+            color: '#fff',
+            border: 'none',
+            borderRadius: 4,
+            padding: '4px 12px',
+            cursor: sceneNav.transition !== 'idle' ? 'not-allowed' : 'pointer',
+            opacity: sceneNav.transition !== 'idle' ? 0.5 : 1,
+          }}
+        >
+          {sceneNav.currentScene === 'indoor' ? 'Go Outside' : 'Go Inside'}
         </button>
       </div>
       {/* Board Modal */}

@@ -25,6 +25,7 @@ export interface Agent {
   lastSeenAt: string
   col?: number
   row?: number
+  scene?: 'indoor' | 'outdoor'
 }
 
 /** Extra data optionally passed from dashboard summary */
@@ -39,6 +40,8 @@ interface Props {
   agent: Agent
   rpg?: AgentRpgData
   onStatusChange: (id: string, status: AgentStatus) => void
+  currentScene?: 'indoor' | 'outdoor'
+  onSceneSwitch?: (scene: 'indoor' | 'outdoor') => void
 }
 
 /* ================================================================== */
@@ -167,8 +170,9 @@ function MiniStat({ label, base, bonus }: { label: string; base: number; bonus: 
 /*  Collapsed row                                                      */
 /* ================================================================== */
 
-function CollapsedCard({ agent, meta, onToggle }: {
+function CollapsedCard({ agent, meta, onToggle, currentScene, onSceneSwitch }: {
   agent: Agent; meta: RpgMeta; onToggle: () => void
+  currentScene?: 'indoor' | 'outdoor'; onSceneSwitch?: (scene: 'indoor' | 'outdoor') => void
 }) {
   const uptime = fmtUptime(agent.lastSeenAt)
   const color = STATUS_COLOR[agent.status] ?? '#888'
@@ -188,6 +192,34 @@ function CollapsedCard({ agent, meta, onToggle }: {
         <span style={{ fontSize: 11, color, fontWeight: 'bold' }}>
           {agent.emoji} {agent.status}
         </span>
+
+        {/* Agent scene location — click to navigate to that scene */}
+        {onSceneSwitch && (() => {
+          const agentScene = agent.scene ?? 'indoor'
+          const isHere = agentScene === currentScene
+          return (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                onSceneSwitch(agentScene)
+              }}
+              title={isHere ? 'Already viewing this scene' : `Go to ${agentScene === 'indoor' ? 'Office' : 'Farm'}`}
+              style={{
+                fontSize: 9,
+                fontFamily: 'monospace',
+                background: agentScene === 'indoor' ? '#2a3a2e' : '#2a2e4e',
+                color: agentScene === 'indoor' ? '#6b9' : '#8af',
+                border: isHere ? '1px solid #888' : '1px solid #444',
+                borderRadius: 3,
+                padding: '1px 6px',
+                cursor: isHere ? 'default' : 'pointer',
+                opacity: isHere ? 0.6 : 1,
+              }}
+            >
+              {agentScene === 'indoor' ? 'Office' : 'Farm'}
+            </button>
+          )
+        })()}
 
         {/* Uptime pushed right */}
         <span style={{ marginLeft: 'auto', fontSize: 10, color: '#888' }}>
@@ -235,12 +267,21 @@ function PortraitSmall({ agentId, meta }: { agentId: string; meta: RpgMeta }) {
 /*  AgentCard (collapsible)                                            */
 /* ================================================================== */
 
-export function AgentCard({ agent, rpg, onStatusChange }: Props) {
+export function AgentCard({ agent, rpg, onStatusChange, currentScene, onSceneSwitch }: Props) {
   const [expanded, setExpanded] = useState(false)
   const meta = RPG_META[agent.id] ?? RPG_META.gaia
 
   if (!expanded) {
-    return <CollapsedCard agent={agent} meta={meta} onToggle={() => setExpanded(true)} />
+    return <CollapsedCard agent={agent} meta={meta} onToggle={() => {
+      const agentScene = agent.scene ?? 'indoor'
+      if (agentScene !== currentScene && onSceneSwitch) {
+        // Agent is in another scene → navigate there (don't expand)
+        onSceneSwitch(agentScene)
+      } else {
+        // Agent is here → expand details
+        setExpanded(true)
+      }
+    }} currentScene={currentScene} onSceneSwitch={onSceneSwitch} />
   }
 
   const hp = STATUS_HP[agent.status] ?? 100

@@ -36,6 +36,16 @@ export class EventsGateway {
     client.broadcast.emit('agent:walk', data)
   }
 
+  /** Client moves agent to another scene → update + broadcast to all */
+  @SubscribeMessage('agent:scene')
+  handleScene(
+    @MessageBody() data: { agentId: string; scene: 'indoor' | 'outdoor' },
+    @ConnectedSocket() client: Socket,
+  ): void {
+    const updated = this.agentsService.updateScene(data.agentId, data.scene)
+    client.broadcast.emit('agent:statusChanged', updated)
+  }
+
   /* ---------- Modal events ---------- */
 
   @SubscribeMessage('modal:toggled')
