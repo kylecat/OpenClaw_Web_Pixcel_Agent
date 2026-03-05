@@ -13,10 +13,12 @@ const WALKABLE_DECOS: Set<DecorationKind> = new Set(['portal'])
 export function computeBlockedTiles(
   decorations: Decoration[],
   decoTileSize: Partial<Record<DecorationKind, [number, number]>>,
+  extraWalkable?: Set<DecorationKind>,
 ): Set<string> {
   const blocked = new Set<string>()
   for (const deco of decorations) {
     if (WALKABLE_DECOS.has(deco.kind)) continue  // walkable floor decoration
+    if (extraWalkable?.has(deco.kind)) continue   // scene-specific walkable
     const size = decoTileSize[deco.kind]
     if (!size) continue   // pixel-art fallback decorations -- no collision data
     const [w, h] = size

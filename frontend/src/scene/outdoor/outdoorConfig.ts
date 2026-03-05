@@ -31,10 +31,11 @@ export const outdoorConfig: SceneConfig = {
     renderOutdoor(ctx, canvas, world, sprites as OutdoorSprites | null, selectedObject, pendingTile)
   },
   hitTest: (logicalX: number, logicalY: number, world: WorldState): SelectedObject | null => {
-    return outdoorHitTest(logicalX, logicalY, world)
+    // Canvas is displayed at half logical size, so scale coords ×2
+    return outdoorHitTest(logicalX * 2, logicalY * 2, world)
   },
   screenToGrid: (logicalX: number, logicalY: number, cols: number, rows: number) => {
-    const { col, row } = screenToIsoTile(logicalX, logicalY, ISO_ORIGIN_X, ISO_ORIGIN_Y)
+    const { col, row } = screenToIsoTile(logicalX * 2, logicalY * 2, ISO_ORIGIN_X, ISO_ORIGIN_Y)
     if (col < 0 || col >= cols || row < 0 || row >= rows) return null
     return { col, row }
   },
