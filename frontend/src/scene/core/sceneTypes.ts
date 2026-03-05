@@ -1,7 +1,13 @@
 export type CharacterState = 'IDLE' | 'WALK'
 export type Direction = 'UP' | 'DOWN' | 'LEFT' | 'RIGHT'
-export type TileKind = 'FLOOR' | 'BOARD' | 'DASHBOARD'
-export type DecorationKind =
+// Indoor tile types
+export type IndoorTileKind = 'FLOOR' | 'BOARD' | 'DASHBOARD'
+// Outdoor tile types
+export type OutdoorTileKind = 'GRASS' | 'DIRT' | 'WATER' | 'PATH'
+export type TileKind = IndoorTileKind | OutdoorTileKind
+
+// Indoor decoration types
+export type IndoorDecorationKind =
   | 'desk' | 'plant' | 'bookshelf' | 'chair'
   | 'fridge' | 'squareTable' | 'clock'
   | 'shelf1' | 'shelf2' | 'shelf3' | 'pcDesk'
@@ -9,6 +15,13 @@ export type DecorationKind =
   | 'pot1' | 'pot2'
   | 'vendingMachine' | 'waterDispenser'
   | 'exitDoor' | 'portal'
+// Outdoor decoration types
+export type OutdoorDecorationKind =
+  | 'greenhouse1' | 'greenhouse2' | 'greenhouse3'
+  | 'weatherStation' | 'cabin'
+  | 'tree1' | 'tree2' | 'bush'
+  | 'cropEmpty' | 'cropGrowing' | 'cropReady'
+export type DecorationKind = IndoorDecorationKind | OutdoorDecorationKind
 
 export interface GridTile {
   kind: TileKind
@@ -59,6 +72,10 @@ export type SelectedObject =
   | { kind: 'exitDoor' }
   | { kind: 'portal' }
   | { kind: 'decoration'; index: number; decoKind: DecorationKind }
+  // Outdoor interactive buildings
+  | { kind: 'greenhouse'; index: number }
+  | { kind: 'weatherStation' }
+  | { kind: 'cabin' }
 
 // T9: Scene abstraction — each scene (indoor, outdoor) implements this interface
 export interface SceneConfig {
