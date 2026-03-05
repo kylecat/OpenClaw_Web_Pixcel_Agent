@@ -23,14 +23,25 @@ export interface SceneCanvasProps {
   onSelect?: (obj: SelectedObject | null) => void
   /** Called when a character is walked to a tile via canvas click (for WebSocket sync) */
   onWalk?: (agentId: string, col: number, row: number) => void
+  /** If set, only these agent IDs are rendered (others hidden from WorldState) */
+  visibleAgents?: Set<string>
 }
 
 // Canvas is displayed at this fraction of its logical size
 const CSS_SCALE = 0.64
 
-export const SceneCanvas = forwardRef<SceneCanvasHandle, SceneCanvasProps>(({ config, onSelect, onWalk }, ref) => {
+export const SceneCanvas = forwardRef<SceneCanvasHandle, SceneCanvasProps>(({ config, onSelect, onWalk, visibleAgents }, ref) => {
   const canvasRef      = useRef<HTMLCanvasElement>(null)
-  const worldRef       = useRef<WorldState>(config.createWorldState())
+  const worldRef       = useRef<WorldState>(null as unknown as WorldState)
+  if (worldRef.current === null) {
+    const w = config.createWorldState()
+    if (visibleAgents) {
+      for (const id of [...w.characters.keys()]) {
+        if (!visibleAgents.has(id)) w.characters.delete(id)
+      }
+    }
+    worldRef.current = w
+  }
   const spritesRef     = useRef<unknown>(null)
   const selectedRef    = useRef<SelectedObject | null>(null)
   const pendingTileRef = useRef<{ col: number; row: number } | null>(null)
@@ -39,8 +50,8 @@ export const SceneCanvas = forwardRef<SceneCanvasHandle, SceneCanvasProps>(({ co
   const onWalkRef      = useRef(onWalk)
   onWalkRef.current    = onWalk
 
-  const CANVAS_W = (config.cols + config.padding.left + config.padding.right) * config.tileSize
-  const CANVAS_H = (config.rows + config.padding.top + config.padding.bottom) * config.tileSize
+  const CANVAS_W = config.canvasWidth ?? (config.cols + config.padding.left + config.padding.right) * config.tileSize
+  const CANVAS_H = config.canvasHeight ?? (config.rows + config.padding.top + config.padding.bottom) * config.tileSize
 
   const walkAgent = useCallback((agentId: string, target: WalkTarget) => {
     const ch = worldRef.current.characters.get(agentId)
@@ -103,6 +114,9 @@ export const SceneCanvas = forwardRef<SceneCanvasHandle, SceneCanvasProps>(({ co
 
     /** Convert logical pixel coords to grid (col, row), or null if outside grid */
     const toGridTile = (lx: number, ly: number): { col: number; row: number } | null => {
+      if (config.screenToGrid) {
+        return config.screenToGrid(lx, ly, config.cols, config.rows)
+      }
       const col = Math.floor((lx - OX) / TILE_SIZE)
       const row = Math.floor((ly - OY) / TILE_SIZE)
       if (col < 0 || col >= config.cols || row < 0 || row >= config.rows) return null

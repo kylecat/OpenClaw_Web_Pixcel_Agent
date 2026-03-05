@@ -30,4 +30,14 @@ export class AgentsController {
     this.events.emitAgentStatus(updated)
     return updated
   }
+
+  @Patch(':id/scene')
+  updateScene(
+    @Param('id') id: string,
+    @Body() dto: { scene: 'indoor' | 'outdoor' },
+  ): Agent {
+    const updated = this.agentsService.updateScene(id, dto.scene)
+    this.events.emitAgentStatus(updated)
+    return updated
+  }
 }

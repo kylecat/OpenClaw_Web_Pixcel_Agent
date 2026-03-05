@@ -1,8 +1,8 @@
 import type { SceneConfig, WorldState, SelectedObject } from '../core/sceneTypes'
-import { ISO_TILE_W } from './isoMath'
+import { ISO_TILE_W, screenToIsoTile } from './isoMath'
+import { renderOutdoor, ISO_CANVAS_W, ISO_CANVAS_H, ISO_ORIGIN_X, ISO_ORIGIN_Y } from './outdoorRenderer'
 import { createOutdoorWorldState, OUTDOOR_COLS, OUTDOOR_ROWS, CABIN_WALK_COL, CABIN_WALK_ROW, WEATHER_WALK_COL, WEATHER_WALK_ROW, GH1_COL, GH2_COL, GH3_COL, GH_WALK_ROWS } from './outdoorWorldState'
 import { loadOutdoorSprites, type OutdoorSprites } from './outdoorSprites'
-import { renderOutdoor } from './outdoorRenderer'
 import { outdoorHitTest } from './outdoorHitTest'
 
 export const outdoorConfig: SceneConfig = {
@@ -23,6 +23,8 @@ export const outdoorConfig: SceneConfig = {
     greenhouse2: { col: GH2_COL + 2,      row: GH_WALK_ROWS[1] },
     greenhouse3: { col: GH3_COL + 2,      row: GH_WALK_ROWS[2] },
   },
+  canvasWidth: ISO_CANVAS_W,
+  canvasHeight: ISO_CANVAS_H,
   createWorldState: createOutdoorWorldState,
   loadSprites: loadOutdoorSprites,
   render: (ctx, canvas, world, sprites, selectedObject, pendingTile) => {
@@ -30,5 +32,10 @@ export const outdoorConfig: SceneConfig = {
   },
   hitTest: (logicalX: number, logicalY: number, world: WorldState): SelectedObject | null => {
     return outdoorHitTest(logicalX, logicalY, world)
+  },
+  screenToGrid: (logicalX: number, logicalY: number, cols: number, rows: number) => {
+    const { col, row } = screenToIsoTile(logicalX, logicalY, ISO_ORIGIN_X, ISO_ORIGIN_Y)
+    if (col < 0 || col >= cols || row < 0 || row >= rows) return null
+    return { col, row }
   },
 }

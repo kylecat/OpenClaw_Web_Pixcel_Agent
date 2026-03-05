@@ -1,6 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common'
 import { AgentStatus, STATUS_EMOJI } from '../common/enums/agent-status.enum.js'
 
+export type AgentScene = 'indoor' | 'outdoor'
+
 export interface Agent {
   id: string
   displayName: string
@@ -11,6 +13,7 @@ export interface Agent {
   lastSeenAt: string
   col: number
   row: number
+  scene: AgentScene
 }
 
 const AGENT_HOME: Record<string, { col: number; row: number }> = {
@@ -41,6 +44,7 @@ export class AgentsService {
       lastSeenAt: now,
       col: 6,
       row: 6,
+      scene: 'indoor',
     })
     this.agents.set('astraea', {
       id: 'astraea',
@@ -51,6 +55,7 @@ export class AgentsService {
       lastSeenAt: now,
       col: 18,
       row: 5,
+      scene: 'indoor',
     })
   }
 
@@ -81,5 +86,12 @@ export class AgentsService {
       agent.col = col
       agent.row = row
     }
+  }
+
+  updateScene(id: string, scene: AgentScene): Agent {
+    const agent = this.findOne(id)
+    agent.scene = scene
+    agent.lastSeenAt = new Date().toISOString()
+    return agent
   }
 }
