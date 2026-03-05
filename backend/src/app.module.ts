@@ -7,9 +7,11 @@ import { BoardModule } from './board/board.module.js';
 import { DashboardModule } from './dashboard/dashboard.module.js';
 import { OpenClawModule } from './openclaw/openclaw.module.js';
 import { ShelfModule } from './shelf/shelf.module.js';
+import { GreenhouseModule } from './greenhouse/greenhouse.module.js';
+import { WeatherModule } from './weather/weather.module.js';
 
 @Module({
-  imports: [EventsModule, AgentsModule, BoardModule, DashboardModule, OpenClawModule, ShelfModule],
+  imports: [EventsModule, AgentsModule, BoardModule, DashboardModule, OpenClawModule, ShelfModule, GreenhouseModule, WeatherModule],
   controllers: [AppController],
   providers: [AppService],
 })
