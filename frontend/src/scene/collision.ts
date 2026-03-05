@@ -1,6 +1,7 @@
 import type { Decoration, DecorationKind, WorldState, SelectedObject } from './types'
 import { TILE_SIZE, SCENE_PAD_L, SCENE_PAD_T } from './characters'
 import { CHAR_FRAME_W, CHAR_FRAME_H } from './spriteLoader'
+import { BOARD_COL, DASH_COL } from './worldState'
 
 const OX = SCENE_PAD_L * TILE_SIZE  // 32 px
 const OY = SCENE_PAD_T * TILE_SIZE  // 96 px
@@ -10,6 +11,9 @@ const CHAR_DW = CHAR_FRAME_W * CHAR_SCALE  // 64 px
 const CHAR_DH = CHAR_FRAME_H * CHAR_SCALE  // 128 px
 
 // ── Collision ────────────────────────────────────────────────────────────────
+
+// Decorations that are drawn on the floor but do NOT block character movement.
+const WALKABLE_DECOS: Set<DecorationKind> = new Set(['portal'])
 
 /**
  * Compute which grid tiles are fully or partially occupied by decorations.
@@ -24,6 +28,7 @@ export function computeBlockedTiles(
 ): Set<string> {
   const blocked = new Set<string>()
   for (const deco of decorations) {
+    if (WALKABLE_DECOS.has(deco.kind)) continue  // walkable floor decoration
     const size = decoTileSize[deco.kind]
     if (!size) continue   // pixel-art fallback decorations — no collision data
     const [w, h] = size
@@ -80,18 +85,17 @@ export function hitTest(
     }
   }
 
-  // 2. Bulletin board — 5×3 tiles, top-left = (OX + 1*TILE, OY − TILE_SIZE)
-  //    Layout: 1格 | Board (cols 1–5) | 3格 | Dashboard (cols 9–13)
+  // 2. Bulletin board — 5×3 tiles
   if (
-    logicalX >= OX + 1 * TILE_SIZE && logicalX <= OX + 6 * TILE_SIZE &&
+    logicalX >= OX + BOARD_COL * TILE_SIZE && logicalX <= OX + (BOARD_COL + 5) * TILE_SIZE &&
     logicalY >= OY - TILE_SIZE && logicalY <= OY + 2 * TILE_SIZE
   ) {
     return { kind: 'board' }
   }
 
-  // 3. Dashboard — 5×3 tiles, top-left = (OX + 9*TILE, OY − TILE_SIZE)
+  // 3. Dashboard — 5×3 tiles
   if (
-    logicalX >= OX + 9 * TILE_SIZE && logicalX <= OX + 14 * TILE_SIZE &&
+    logicalX >= OX + DASH_COL * TILE_SIZE && logicalX <= OX + (DASH_COL + 5) * TILE_SIZE &&
     logicalY >= OY - TILE_SIZE && logicalY <= OY + 2 * TILE_SIZE
   ) {
     return { kind: 'dashboard' }

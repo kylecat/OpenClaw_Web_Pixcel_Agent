@@ -49,6 +49,9 @@ export interface Sprites {
   pot2:            HTMLImageElement
   vendingMachine:  HTMLImageElement
   waterDispenser:  HTMLImageElement
+  exitDoor:        HTMLImageElement
+  portal:          HTMLImageElement
+  shelf3:          HTMLImageElement
 }
 
 function loadImage(src: string): Promise<HTMLImageElement> {
@@ -74,6 +77,7 @@ export async function loadSprites(): Promise<Sprites> {
     sofa1, sofa2, sofa3,
     pot1, pot2,
     vendingMachine, waterDispenser,
+    exitDoor, portal, shelf3,
   ] = await Promise.all([
     loadImage('/assets/characters/gaia.png'),
     loadImage('/assets/characters/astraea.png'),
@@ -97,6 +101,9 @@ export async function loadSprites(): Promise<Sprites> {
     loadImage('/assets/pot2.png'),
     loadImage('/assets/vending_machine.png'),
     loadImage('/assets/water_dispenser.png'),
+    loadImage('/assets/exit_door.png'),
+    loadImage('/assets/portal.png'),
+    loadImage('/assets/shelf3.png'),
   ])
   // Wall textures loaded separately so they don't block the rest on failure
   const [wallTop, wallSide] = await Promise.all([
@@ -129,5 +136,8 @@ export async function loadSprites(): Promise<Sprites> {
     pot2,
     vendingMachine,
     waterDispenser,
+    exitDoor,
+    portal,
+    shelf3,
   }
 }

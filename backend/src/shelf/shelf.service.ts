@@ -7,7 +7,7 @@ const ALLOWED_ROOTS: Record<string, string> = {
   research: '/home/jetson/Desktop/OpenClaw_MCP/ResearchLog',
   data: resolve(__dirname, '../../../data'),
   devdocs: resolve(__dirname, '../../../DevDocuments'),
-  skills: '/home/jetson/.openclaw/workspace-gaia/skills',
+  skills: resolve(__dirname, '../../../data/skills'),
 };
 
 /** File extensions allowed for content preview. */

@@ -36,10 +36,10 @@ export const BOARD_ROW      = 0
 export const BOARD_WALK_COL = 3   // below bulletin board centre
 export const BOARD_WALK_ROW = 2
 
-// Dashboard: 5×3, visual cols 9–13, 3-tile gap after board
-export const DASH_COL      = 9
+// Dashboard: 5×3, visual cols 8–12, 2-tile gap after board
+export const DASH_COL      = 8
 export const DASH_ROW      = 0
-export const DASH_WALK_COL = 11   // below dashboard centre
+export const DASH_WALK_COL = 10   // below dashboard centre
 export const DASH_WALK_ROW = 2
 
 // Exit door: 2×2, wall-mounted at cols 17–18, hangs 1 tile into wall
@@ -71,9 +71,9 @@ const DECORATIONS: Decoration[] = [
   // ── LEFT ZONE: work area (cols 0–13) ──────────────────────────────────────
   // shelf1 (4×2) — left wall, row 4 (moved down 1 tile)
   { col: 0,  row: 4, kind: 'shelf1' },
-  // pc desks (2×1.5) to the right of shelf1, same row band
-  { col: 5,  row: 3, kind: 'pcDesk' },
-  { col: 10, row: 3, kind: 'pcDesk' },
+  // pc desks (2×1.5) — side by side, row 4
+  { col: 7,  row: 4, kind: 'pcDesk' },
+  { col: 9, row: 4, kind: 'pcDesk' },
   // 4-tile walkway gap: rows 5–8 (no furniture)
   // shelf3 (4×2) — left wall, row 8
   { col: 0,  row: 8, kind: 'shelf3' },
@@ -92,12 +92,14 @@ const DECORATIONS: Decoration[] = [
   // appliances along right edge
   { col: 21, row: 3, kind: 'waterDispenser' },
   { col: 21, row: 5, kind: 'fridge' },
-  { col: 20, row: 7, kind: 'vendingMachine' },
-  // lounge: square table (2×2) + sofas (1×2, 1×2, 2×2)
-  { col: 17, row: 7,  kind: 'squareTable' },
-  { col: 16, row: 9,  kind: 'sofa1' },
-  { col: 19, row: 9,  kind: 'sofa2' },
-  { col: 17, row: 10, kind: 'sofa3' },
+  { col: 15, row: 3, kind: 'vendingMachine' },
+  // lounge: black sofa top (2×2), pink sofas ×2 each side, table bottom (2×2)
+  { col: 17, row: 8,  kind: 'sofa3' },
+  { col: 17, row: 10, kind: 'squareTable' },
+  { col: 16, row: 10, kind: 'sofa1' },
+  { col: 19, row: 10, kind: 'sofa2' },
+  // bottom-right corner pot
+  { col: 21, row: 10, kind: 'pot1' },
 
   // ── TOP-RIGHT: exit door + pot divider + portal (all wall-mounted) ────────
   // Layout on wall: [ExitDoor 17–18] [Pot 19] [Portal 20–21]
