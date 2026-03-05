@@ -1,124 +1,137 @@
 import type { OutdoorTileKind, OutdoorDecorationKind } from '../core/sceneTypes'
 
 /**
- * Outdoor sprites — initially uses programmatic placeholders (colored diamonds).
- * Real pixel-art assets will replace these in T16.
+ * Outdoor sprites — loads pixel-art PNG assets from /assets/outdoor/.
  */
 export interface OutdoorSprites {
-  tiles: Record<OutdoorTileKind, HTMLCanvasElement>
-  decorations: Partial<Record<OutdoorDecorationKind, HTMLCanvasElement>>
+  tiles: Record<OutdoorTileKind, HTMLImageElement | HTMLCanvasElement>
+  decorations: Partial<Record<OutdoorDecorationKind, HTMLImageElement | HTMLCanvasElement>>
+  /** 8-direction character sprite sheets (gaia_iso.png, astraea_iso.png) */
+  characters: Record<string, HTMLImageElement>
 }
 
-// Tile fill colors for placeholder diamonds
-const TILE_COLORS: Record<OutdoorTileKind, string> = {
-  GRASS: '#4a8c3f',
-  DIRT:  '#8b6914',
-  WATER: '#3a7cbf',
-  PATH:  '#c4a46c',
+// ── Asset path mapping ─────────────────────────────────────────────
+
+const TILE_ASSETS: Record<OutdoorTileKind, string> = {
+  GRASS: '/assets/outdoor/iso_grass.png',
+  DIRT:  '/assets/outdoor/iso_dirt.png',
+  WATER: '/assets/outdoor/iso_water.png',
+  PATH:  '/assets/outdoor/iso_path.png',
 }
 
-// Decoration placeholder colors
-const DECO_COLORS: Record<OutdoorDecorationKind, string> = {
-  greenhouse1:    '#7ec8a0',
-  greenhouse2:    '#6db88e',
-  greenhouse3:    '#5ca87c',
-  weatherStation: '#a0a0a8',
-  cabin:          '#8b5e3c',
-  tree1:          '#2d6a1e',
-  tree2:          '#3a7d28',
-  bush:           '#5a9a3a',
-  cropEmpty:      '#9a7840',
-  cropGrowing:    '#5b9e3a',
-  cropReady:      '#d4a030',
+const DECO_ASSETS: Record<OutdoorDecorationKind, string> = {
+  greenhouse1:      '/assets/outdoor/greenhouse.png',
+  greenhouse2:      '/assets/outdoor/greenhouse2.png',
+  greenhouse3:      '/assets/outdoor/greenhouse.png',
+  weatherStation:   '/assets/outdoor/weather_station.png',
+  cabin:            '/assets/outdoor/cabin.png',
+  windTurbine:      '/assets/outdoor/wind_turbine.png',
+  tree1:            '/assets/outdoor/tree_1.png',
+  tree2:            '/assets/outdoor/tree_2.png',
+  bush:             '/assets/outdoor/bush.png',
+  cropEmpty:        '/assets/outdoor/crop_plot_empty.png',
+  cropGrowing:      '/assets/outdoor/crop_plot_growing.png',
+  cropReady:        '/assets/outdoor/crop_plot_ready.png',
+  cropLongGrowing:  '/assets/outdoor/crop_long_growing.png',
+  cropLongCovered:  '/assets/outdoor/crop_long_covered.png',
+  cropLongHarvest:  '/assets/outdoor/crop_long_harvest.png',
 }
 
-// Decoration sizes in pixels for placeholder rendering
-import { ISO_TILE_W, ISO_TILE_H } from './isoMath'
-import { OUTDOOR_DECO_TILE_SIZE } from './outdoorWorldState'
+const CHAR_ASSETS: Record<string, string> = {
+  gaia:    '/assets/outdoor/gaia_iso.png',
+  astraea: '/assets/outdoor/astraea_iso.png',
+}
+
+// ── 8-direction sprite sheet constants ─────────────────────────────
+
+/** Frame dimensions in the sprite sheet (source pixels) */
+export const ISO_CHAR_FRAME_W = 32
+export const ISO_CHAR_FRAME_H = 24
+/** Sprite sheet layout: 4 columns × 8 rows */
+export const ISO_SHEET_COLS = 4
+/** Direction row order: S=0, SW=1, W=2, NW=3, N=4, NE=5, E=6, SE=7 */
+export const ISO_DIR_ROW: Record<string, number> = {
+  S: 0, SW: 1, W: 2, NW: 3, N: 4, NE: 5, E: 6, SE: 7,
+}
+/** Map grid directions (UP/DOWN/LEFT/RIGHT) to 8-direction names */
+export const GRID_TO_ISO_DIR: Record<string, string> = {
+  UP:    'N',
+  DOWN:  'S',
+  LEFT:  'W',
+  RIGHT: 'E',
+}
+/** Walk animation frames (0-3 cycle) */
+export const ISO_WALK_FRAMES = 4
+/** Idle uses frame 0 */
+export const ISO_IDLE_FRAME = 0
+
+// ── Image loader helper ────────────────────────────────────────────
+
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => resolve(img)
+    img.onerror = () => reject(new Error(`Failed to load: ${src}`))
+    img.src = src
+  })
+}
+
+// ── Main loader ────────────────────────────────────────────────────
 
 /**
- * Create a placeholder diamond tile canvas.
- */
-function createTilePlaceholder(color: string): HTMLCanvasElement {
-  const canvas = document.createElement('canvas')
-  canvas.width = ISO_TILE_W
-  canvas.height = ISO_TILE_H
-  const ctx = canvas.getContext('2d')!
-  const hw = ISO_TILE_W / 2
-  const hh = ISO_TILE_H / 2
-  // Diamond shape
-  ctx.fillStyle = color
-  ctx.beginPath()
-  ctx.moveTo(hw, 0)
-  ctx.lineTo(ISO_TILE_W, hh)
-  ctx.lineTo(hw, ISO_TILE_H)
-  ctx.lineTo(0, hh)
-  ctx.closePath()
-  ctx.fill()
-  // Subtle outline
-  ctx.strokeStyle = 'rgba(0,0,0,0.2)'
-  ctx.lineWidth = 1
-  ctx.stroke()
-  return canvas
-}
-
-/**
- * Create a placeholder decoration canvas — a colored diamond scaled to the
- * decoration's tile size, with a label.
- */
-function createDecoPlaceholder(
-  kind: OutdoorDecorationKind,
-  color: string,
-): HTMLCanvasElement {
-  const size = OUTDOOR_DECO_TILE_SIZE[kind] ?? [1, 1]
-  const w = size[0] * ISO_TILE_W
-  const h = size[1] * ISO_TILE_H
-  const canvas = document.createElement('canvas')
-  canvas.width = w
-  canvas.height = h
-  const ctx = canvas.getContext('2d')!
-  const hw = w / 2
-  const hh = h / 2
-  // Diamond
-  ctx.fillStyle = color
-  ctx.beginPath()
-  ctx.moveTo(hw, 0)
-  ctx.lineTo(w, hh)
-  ctx.lineTo(hw, h)
-  ctx.lineTo(0, hh)
-  ctx.closePath()
-  ctx.fill()
-  ctx.strokeStyle = 'rgba(0,0,0,0.3)'
-  ctx.lineWidth = 2
-  ctx.stroke()
-  // Label
-  ctx.fillStyle = '#fff'
-  ctx.font = 'bold 10px monospace'
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
-  ctx.fillText(kind, hw, hh)
-  return canvas
-}
-
-/**
- * Load outdoor sprites. Currently returns programmatic placeholders.
- * In T16, this will load actual PNG assets from /assets/outdoor/.
+ * Load all outdoor pixel-art assets from /assets/outdoor/.
  */
 export async function loadOutdoorSprites(): Promise<OutdoorSprites> {
-  // Build tile placeholders
-  const tiles = {} as Record<OutdoorTileKind, HTMLCanvasElement>
-  for (const [kind, color] of Object.entries(TILE_COLORS)) {
-    tiles[kind as OutdoorTileKind] = createTilePlaceholder(color)
+  // Load tile images
+  const tileEntries = await Promise.all(
+    Object.entries(TILE_ASSETS).map(async ([kind, src]) => {
+      try {
+        const img = await loadImage(src)
+        return [kind, img] as [string, HTMLImageElement]
+      } catch {
+        console.warn(`Tile asset missing: ${src}`)
+        return null
+      }
+    }),
+  )
+  const tiles = {} as Record<OutdoorTileKind, HTMLImageElement>
+  for (const entry of tileEntries) {
+    if (entry) tiles[entry[0] as OutdoorTileKind] = entry[1]
   }
 
-  // Build decoration placeholders
-  const decorations: Partial<Record<OutdoorDecorationKind, HTMLCanvasElement>> = {}
-  for (const [kind, color] of Object.entries(DECO_COLORS)) {
-    decorations[kind as OutdoorDecorationKind] = createDecoPlaceholder(
-      kind as OutdoorDecorationKind,
-      color,
-    )
+  // Load decoration images
+  const decoEntries = await Promise.all(
+    Object.entries(DECO_ASSETS).map(async ([kind, src]) => {
+      try {
+        const img = await loadImage(src)
+        return [kind, img] as [string, HTMLImageElement]
+      } catch {
+        console.warn(`Deco asset missing: ${src}`)
+        return null
+      }
+    }),
+  )
+  const decorations: Partial<Record<OutdoorDecorationKind, HTMLImageElement>> = {}
+  for (const entry of decoEntries) {
+    if (entry) decorations[entry[0] as OutdoorDecorationKind] = entry[1]
   }
 
-  return { tiles, decorations }
+  // Load character sprite sheets
+  const charEntries = await Promise.all(
+    Object.entries(CHAR_ASSETS).map(async ([id, src]) => {
+      try {
+        const img = await loadImage(src)
+        return [id, img] as [string, HTMLImageElement]
+      } catch {
+        console.warn(`Character sheet missing: ${src}`)
+        return null
+      }
+    }),
+  )
+  const characters: Record<string, HTMLImageElement> = {}
+  for (const entry of charEntries) {
+    if (entry) characters[entry[0]] = entry[1]
+  }
+
+  return { tiles, decorations, characters }
 }
