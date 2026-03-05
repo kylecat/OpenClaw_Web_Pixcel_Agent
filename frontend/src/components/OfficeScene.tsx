@@ -111,9 +111,8 @@ export const OfficeScene = forwardRef<OfficeSceneHandle, OfficeSceneProps>(({ on
     })
 
     // ── Mouse interaction ────────────────────────────────────────────────────
-    // CSS scale: canvas is shown at CSS_SCALE of its logical width/height.
-    // Mouse coords from the browser are in CSS px; divide by CSS_SCALE to get
-    // the logical-pixel coordinate used by the renderer.
+    // Mouse coords from the browser are in CSS px; convert to logical px
+    // using the actual bounding-rect size (robust against DPR / rounding).
     const OX = SCENE_PAD_L * TILE_SIZE
     const OY = SCENE_PAD_T * TILE_SIZE
 
@@ -129,7 +128,7 @@ export const OfficeScene = forwardRef<OfficeSceneHandle, OfficeSceneProps>(({ on
       const rect = canvas.getBoundingClientRect()
       const cssX = e.clientX - rect.left
       const cssY = e.clientY - rect.top
-      const { x, y } = cssToLogical(cssX, cssY, CSS_SCALE)
+      const { x, y } = cssToLogical(cssX, cssY, rect.width, rect.height, CANVAS_W, CANVAS_H)
       const hit = hitTest(x, y, worldRef.current, DECO_TILE_SIZE)
 
       if (hit) {
@@ -146,7 +145,7 @@ export const OfficeScene = forwardRef<OfficeSceneHandle, OfficeSceneProps>(({ on
       const rect = canvas.getBoundingClientRect()
       const cssX = e.clientX - rect.left
       const cssY = e.clientY - rect.top
-      const { x, y } = cssToLogical(cssX, cssY, CSS_SCALE)
+      const { x, y } = cssToLogical(cssX, cssY, rect.width, rect.height, CANVAS_W, CANVAS_H)
       const hit = hitTest(x, y, worldRef.current, DECO_TILE_SIZE)
 
       // Character selected + clicking empty floor → two-step confirm

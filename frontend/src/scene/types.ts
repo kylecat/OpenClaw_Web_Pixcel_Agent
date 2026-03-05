@@ -56,4 +56,6 @@ export type SelectedObject =
   | { kind: 'character'; id: string }
   | { kind: 'board' }
   | { kind: 'dashboard' }
+  | { kind: 'exitDoor' }
+  | { kind: 'portal' }
   | { kind: 'decoration'; index: number; decoKind: DecorationKind }

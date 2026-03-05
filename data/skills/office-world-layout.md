@@ -80,3 +80,37 @@ curl -X POST ${PIXELAGENT_API}/api/agents/${AGENT_ID}/walk \
 # Walk to arbitrary tile via WebSocket
 # Event: 'agent:walk' with payload { agentId, col, row }
 ```
+
+---
+
+## API — Shelf Interaction
+
+Agents can browse shelf contents directly via API **without clicking the UI**.
+This is the recommended approach — more reliable than UI click.
+
+### Shelf Mapping
+
+| Shelf | API rootKey | Contents |
+|-------|------------|----------|
+| Shelf 1 (Research Log) | `tasks` | Task markdown files |
+| Shelf 2 (SKILL) | `skills` | Skill definition files |
+| Shelf 3 (Data / DevDocs) | `devdocs` | DevDocuments & data |
+
+### Endpoints
+
+```bash
+# List files in a shelf root
+curl ${PIXELAGENT_API}/api/shelf/{rootKey}
+# Example: curl ${PIXELAGENT_API}/api/shelf/tasks
+
+# List files in a sub-directory
+curl "${PIXELAGENT_API}/api/shelf/{rootKey}?sub=subfolder"
+
+# Read a specific file
+curl "${PIXELAGENT_API}/api/shelf/{rootKey}/file?path=TASK-002.md"
+```
+
+### When to Use
+
+- **API (recommended)**: When you need to read shelf contents programmatically — faster and more reliable.
+- **UI click**: When you want the character to visually walk to the shelf and open the modal for user observation. Shelves have an expanded click area (half-tile padding) for easier targeting.

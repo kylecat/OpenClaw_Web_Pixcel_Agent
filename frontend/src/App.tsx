@@ -50,6 +50,14 @@ function App() {
       setDashboardOpen(true)
       socket.emit('modal:toggled', { modal: 'dashboard', open: true })
     }
+    if (obj?.kind === 'exitDoor') {
+      console.log('[select] exit door clicked')
+      socket.emit('modal:toggled', { modal: 'exitDoor', open: true })
+    }
+    if (obj?.kind === 'portal') {
+      console.log('[select] portal clicked')
+      socket.emit('modal:toggled', { modal: 'portal', open: true })
+    }
     if (obj?.kind === 'decoration' && (obj.decoKind === 'shelf1' || obj.decoKind === 'shelf2' || obj.decoKind === 'shelf3')) {
       setShelfId(obj.decoKind as 'shelf1' | 'shelf2' | 'shelf3')
       setShelfOpen(true)
