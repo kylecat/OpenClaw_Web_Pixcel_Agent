@@ -1,6 +1,7 @@
 import type { Decoration, DecorationKind, WorldState, SelectedObject } from './types'
 import { TILE_SIZE, SCENE_PAD_L, SCENE_PAD_T } from './characters'
 import { CHAR_FRAME_W, CHAR_FRAME_H } from './spriteLoader'
+import { BOARD_COL, DASH_COL, EXIT_COL, PORTAL_COL } from './worldState'
 
 const OX = SCENE_PAD_L * TILE_SIZE  // 32 px
 const OY = SCENE_PAD_T * TILE_SIZE  // 96 px
@@ -10,6 +11,9 @@ const CHAR_DW = CHAR_FRAME_W * CHAR_SCALE  // 64 px
 const CHAR_DH = CHAR_FRAME_H * CHAR_SCALE  // 128 px
 
 // ── Collision ────────────────────────────────────────────────────────────────
+
+// Decorations that are drawn on the floor but do NOT block character movement.
+const WALKABLE_DECOS: Set<DecorationKind> = new Set(['portal'])
 
 /**
  * Compute which grid tiles are fully or partially occupied by decorations.
@@ -24,6 +28,7 @@ export function computeBlockedTiles(
 ): Set<string> {
   const blocked = new Set<string>()
   for (const deco of decorations) {
+    if (WALKABLE_DECOS.has(deco.kind)) continue  // walkable floor decoration
     const size = decoTileSize[deco.kind]
     if (!size) continue   // pixel-art fallback decorations — no collision data
     const [w, h] = size
@@ -42,14 +47,21 @@ export function computeBlockedTiles(
  * Convert a CSS-pixel mouse coordinate (relative to the canvas element) into
  * a logical-pixel coordinate that matches the drawing coordinate system.
  *
- * The canvas is displayed at CSS_SCALE × its logical size.
+ * Uses the actual bounding-rect size of the canvas element so the mapping
+ * stays correct regardless of CSS scaling, browser rounding, or DPR.
  */
 export function cssToLogical(
   cssX: number,
   cssY: number,
-  cssScale: number,
+  rectWidth: number,
+  rectHeight: number,
+  logicalWidth: number,
+  logicalHeight: number,
 ): { x: number; y: number } {
-  return { x: cssX / cssScale, y: cssY / cssScale }
+  return {
+    x: cssX * (logicalWidth  / rectWidth),
+    y: cssY * (logicalHeight / rectHeight),
+  }
 }
 
 /**
@@ -80,26 +92,62 @@ export function hitTest(
     }
   }
 
-  // 2. Bulletin board — 5×3 tiles, top-left = (OX + 1*TILE, OY − TILE_SIZE)
-  //    Layout: 1格 | Board (cols 1–5) | 3格 | Dashboard (cols 9–13)
+  // 2. Bulletin board — 5×3 tiles
   if (
-    logicalX >= OX + 1 * TILE_SIZE && logicalX <= OX + 6 * TILE_SIZE &&
+    logicalX >= OX + BOARD_COL * TILE_SIZE && logicalX <= OX + (BOARD_COL + 5) * TILE_SIZE &&
     logicalY >= OY - TILE_SIZE && logicalY <= OY + 2 * TILE_SIZE
   ) {
     return { kind: 'board' }
   }
 
-  // 3. Dashboard — 5×3 tiles, top-left = (OX + 9*TILE, OY − TILE_SIZE)
+  // 3. Dashboard — 5×3 tiles
   if (
-    logicalX >= OX + 9 * TILE_SIZE && logicalX <= OX + 14 * TILE_SIZE &&
+    logicalX >= OX + DASH_COL * TILE_SIZE && logicalX <= OX + (DASH_COL + 5) * TILE_SIZE &&
     logicalY >= OY - TILE_SIZE && logicalY <= OY + 2 * TILE_SIZE
   ) {
     return { kind: 'dashboard' }
   }
 
-  // 4. Decorations — reverse order so topmost (last-drawn) wins
+  // 4. Exit door — 2×2, wall-mounted at EXIT_COL, hangs 1 tile into wall
+  if (
+    logicalX >= OX + EXIT_COL * TILE_SIZE && logicalX <= OX + (EXIT_COL + 2) * TILE_SIZE &&
+    logicalY >= OY - TILE_SIZE && logicalY <= OY + TILE_SIZE
+  ) {
+    return { kind: 'exitDoor' }
+  }
+
+  // 5. Portal — 2×2, wall-mounted at PORTAL_COL, hangs 1 tile into wall
+  if (
+    logicalX >= OX + PORTAL_COL * TILE_SIZE && logicalX <= OX + (PORTAL_COL + 2) * TILE_SIZE &&
+    logicalY >= OY - TILE_SIZE && logicalY <= OY + TILE_SIZE
+  ) {
+    return { kind: 'portal' }
+  }
+
+  // 6. Shelves — checked before other decorations with extra padding for easier clicking
+  const SHELF_PAD = TILE_SIZE * 0.5  // half-tile padding around shelf hit area
+  const SHELF_KINDS: Set<DecorationKind> = new Set(['shelf1', 'shelf2', 'shelf3'])
+  for (let i = 0; i < world.decorations.length; i++) {
+    const deco = world.decorations[i]
+    if (!SHELF_KINDS.has(deco.kind)) continue
+    const tileSz = decoTileSize[deco.kind]
+    if (!tileSz) continue
+    const dw = tileSz[0] * TILE_SIZE
+    const dh = tileSz[1] * TILE_SIZE
+    const x = deco.col * TILE_SIZE + OX
+    const y = deco.row * TILE_SIZE + OY
+    if (
+      logicalX >= x - SHELF_PAD && logicalX <= x + dw + SHELF_PAD &&
+      logicalY >= y - SHELF_PAD && logicalY <= y + dh + SHELF_PAD
+    ) {
+      return { kind: 'decoration', index: i, decoKind: deco.kind }
+    }
+  }
+
+  // 7. Other decorations — reverse order so topmost (last-drawn) wins
   for (let i = world.decorations.length - 1; i >= 0; i--) {
     const deco = world.decorations[i]
+    if (SHELF_KINDS.has(deco.kind)) continue  // already checked above
     const tileSz = decoTileSize[deco.kind]
     const dw = tileSz ? tileSz[0] * TILE_SIZE : TILE_SIZE
     const dh = tileSz ? tileSz[1] * TILE_SIZE : TILE_SIZE

@@ -1,8 +1,12 @@
 import type { WorldState, SelectedObject, DecorationKind } from './types'
 import type { Sprites } from './spriteLoader'
-import { TILE_SIZE, SCENE_PAD_L, SCENE_PAD_T, tileCenter } from './characters'
+import { TILE_SIZE, SCENE_PAD_L, SCENE_PAD_R, SCENE_PAD_T, SCENE_PAD_B, tileCenter } from './characters'
 import { CHAR_FRAME_W, CHAR_FRAME_H, DIR_ROW, WALK_FRAMES, IDLE_FRAME } from './spriteLoader'
-import { DECO_TILE_SIZE, BOARD_COL, DASH_COL } from './worldState'
+import { COLS, ROWS, DECO_TILE_SIZE, BOARD_COL, DASH_COL, EXIT_COL, PORTAL_COL } from './worldState'
+
+// Logical canvas dimensions (must match OfficeScene.tsx)
+const CANVAS_W = (COLS + SCENE_PAD_L + SCENE_PAD_R) * TILE_SIZE
+const CANVAS_H = (ROWS + SCENE_PAD_T + SCENE_PAD_B) * TILE_SIZE
 
 // Pixel offset applied to every draw call so the game grid sits inside the padding border
 const OX = SCENE_PAD_L * TILE_SIZE  //  32 px  (0.5 tile left pad)
@@ -60,12 +64,15 @@ export function render(
   // Clear entire canvas to transparent (padding areas stay see-through)
   ctx.clearRect(0, 0, canvas.width, canvas.height)
 
-  const dpr = window.devicePixelRatio || 1
+  // Derive scale from actual buffer vs logical size — stays correct even when
+  // the browser zoom changes after the canvas was initialised.
+  const scaleX = canvas.width  / CANVAS_W
+  const scaleY = canvas.height / CANVAS_H
   ctx.save()
-  ctx.scale(dpr, dpr)
+  ctx.setTransform(scaleX, 0, 0, scaleY, 0, 0)
 
-  const totalW = canvas.width  / dpr
-  const totalH = canvas.height / dpr
+  const totalW = CANVAS_W
+  const totalH = CANVAS_H
   const sceneW = world.cols * TILE_SIZE
   const sceneH = world.rows * TILE_SIZE
 
@@ -180,6 +187,22 @@ export function render(
       5 * TILE_SIZE,
       3 * TILE_SIZE,
     )
+    // Exit door: 2×2, wall-mounted at EXIT_COL, hangs 1 tile into wall
+    ctx.drawImage(
+      sprites.exitDoor,
+      OX + EXIT_COL * TILE_SIZE,
+      boardY,
+      2 * TILE_SIZE,
+      2 * TILE_SIZE,
+    )
+    // Portal: 2×2, wall-mounted at PORTAL_COL, hangs 1 tile into wall
+    ctx.drawImage(
+      sprites.portal,
+      OX + PORTAL_COL * TILE_SIZE,
+      boardY,
+      2 * TILE_SIZE,
+      2 * TILE_SIZE,
+    )
     ctx.imageSmoothingEnabled = false
   }
 
@@ -203,6 +226,7 @@ export function render(
       pot2:           sprites.pot2,
       vendingMachine: sprites.vendingMachine,
       waterDispenser: sprites.waterDispenser,
+      shelf3:         sprites.shelf3,
     }
     for (const deco of world.decorations) {
       const img = decoMap[deco.kind]
@@ -225,6 +249,34 @@ export function render(
     }
     // restore pixel-art mode for characters
     ctx.imageSmoothingEnabled = false
+
+    // ── Shelf labels (drawn on top of shelf decorations) ─────────────────
+    const SHELF_LABELS: Partial<Record<DecorationKind, string>> = {
+      shelf1: 'Research Log',
+      shelf2: 'SKILL',
+      shelf3: 'Data / DevDocs',
+    }
+    for (const deco of world.decorations) {
+      const label = SHELF_LABELS[deco.kind]
+      if (!label) continue
+      const tileSz = DECO_TILE_SIZE[deco.kind]
+      if (!tileSz) continue
+      const dw = tileSz[0] * TILE_SIZE
+      const sx = deco.col * TILE_SIZE + OX + dw / 2
+      const sy = deco.row * TILE_SIZE + OY - 6
+      // Background pill
+      ctx.font = 'bold 18px monospace'
+      const tw = ctx.measureText(label).width + 16
+      ctx.fillStyle = 'rgba(0,0,0,0.55)'
+      ctx.beginPath()
+      ctx.roundRect(sx - tw / 2, sy - 20, tw, 26, 6)
+      ctx.fill()
+      // Text
+      ctx.fillStyle = '#ddd'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillText(label, sx, sy - 7)
+    }
   }
 
   // ── Movement paths (dashed arrow, drawn above decorations, below characters) ──
@@ -389,6 +441,10 @@ export function render(
       ctx.strokeRect(OX + BOARD_COL * TILE_SIZE - 3, OY - TILE_SIZE - 3, 5 * TILE_SIZE + 6, 3 * TILE_SIZE + 6)
     } else if (selectedObject.kind === 'dashboard') {
       ctx.strokeRect(OX + DASH_COL * TILE_SIZE - 3, OY - TILE_SIZE - 3, 5 * TILE_SIZE + 6, 3 * TILE_SIZE + 6)
+    } else if (selectedObject.kind === 'exitDoor') {
+      ctx.strokeRect(OX + EXIT_COL * TILE_SIZE - 3, OY - TILE_SIZE - 3, 2 * TILE_SIZE + 6, 2 * TILE_SIZE + 6)
+    } else if (selectedObject.kind === 'portal') {
+      ctx.strokeRect(OX + PORTAL_COL * TILE_SIZE - 3, OY - TILE_SIZE - 3, 2 * TILE_SIZE + 6, 2 * TILE_SIZE + 6)
     } else if (selectedObject.kind === 'decoration') {
       const deco = world.decorations[selectedObject.index]
       if (deco) {

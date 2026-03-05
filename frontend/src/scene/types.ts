@@ -4,10 +4,11 @@ export type TileKind = 'FLOOR' | 'BOARD' | 'DASHBOARD'
 export type DecorationKind =
   | 'desk' | 'plant' | 'bookshelf' | 'chair'
   | 'fridge' | 'squareTable' | 'clock'
-  | 'shelf1' | 'shelf2' | 'pcDesk'
+  | 'shelf1' | 'shelf2' | 'shelf3' | 'pcDesk'
   | 'sofa1' | 'sofa2' | 'sofa3'
   | 'pot1' | 'pot2'
   | 'vendingMachine' | 'waterDispenser'
+  | 'exitDoor' | 'portal'
 
 export interface GridTile {
   kind: TileKind
@@ -55,4 +56,6 @@ export type SelectedObject =
   | { kind: 'character'; id: string }
   | { kind: 'board' }
   | { kind: 'dashboard' }
+  | { kind: 'exitDoor' }
+  | { kind: 'portal' }
   | { kind: 'decoration'; index: number; decoKind: DecorationKind }

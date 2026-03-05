@@ -3,6 +3,7 @@ import { AgentCard } from './components/AgentCard'
 import { OfficeScene } from './components/OfficeScene'
 import { BoardModal } from './components/BoardModal'
 import { DashboardModal } from './components/DashboardModal'
+import { ShelfModal } from './components/ShelfModal'
 import type { Agent, AgentRpgData } from './components/AgentCard'
 import type { OfficeSceneHandle, WalkTarget } from './components/OfficeScene'
 import type { SelectedObject } from './scene/types'
@@ -36,6 +37,9 @@ function App() {
   const [boardOpen, setBoardOpen] = useState(false)
   // Dashboard modal
   const [dashboardOpen, setDashboardOpen] = useState(false)
+  // Shelf modal
+  const [shelfOpen, setShelfOpen] = useState(false)
+  const [shelfId, setShelfId] = useState<'shelf1' | 'shelf2' | 'shelf3'>('shelf1')
 
   const handleSelect = useCallback((obj: SelectedObject | null) => {
     if (obj?.kind === 'board') {
@@ -45,6 +49,18 @@ function App() {
     if (obj?.kind === 'dashboard') {
       setDashboardOpen(true)
       socket.emit('modal:toggled', { modal: 'dashboard', open: true })
+    }
+    if (obj?.kind === 'exitDoor') {
+      console.log('[select] exit door clicked')
+      socket.emit('modal:toggled', { modal: 'exitDoor', open: true })
+    }
+    if (obj?.kind === 'portal') {
+      console.log('[select] portal clicked')
+      socket.emit('modal:toggled', { modal: 'portal', open: true })
+    }
+    if (obj?.kind === 'decoration' && (obj.decoKind === 'shelf1' || obj.decoKind === 'shelf2' || obj.decoKind === 'shelf3')) {
+      setShelfId(obj.decoKind as 'shelf1' | 'shelf2' | 'shelf3')
+      setShelfOpen(true)
     }
   }, [socket])
 
@@ -287,6 +303,8 @@ function App() {
       <BoardModal open={boardOpen} onClose={closeBoardModal} boardVersion={boardVersion} />
       {/* Dashboard Modal */}
       <DashboardModal open={dashboardOpen} onClose={closeDashboardModal} socket={socket} />
+      {/* Shelf Modal */}
+      <ShelfModal open={shelfOpen} onClose={() => setShelfOpen(false)} shelfId={shelfId} />
     </div>
   )
 }
