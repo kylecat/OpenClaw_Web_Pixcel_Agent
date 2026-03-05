@@ -1,6 +1,7 @@
 ---
-name: office-world-layout
-description: Understand the PixelAgent office world layout, walkable corridors, blocked furniture tiles, and key navigation targets. Use when planning character movement, pathfinding, or deciding where to walk an agent.
+name: L0_office-world-layout
+level: 0
+description: "[L0 - Essential] Understand the PixelAgent office world layout, walkable corridors, blocked furniture tiles, and key navigation targets. Learn this FIRST before any other skill."
 ---
 
 # Office World Layout (PixelAgent)

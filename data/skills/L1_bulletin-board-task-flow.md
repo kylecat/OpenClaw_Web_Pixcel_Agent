@@ -1,6 +1,7 @@
 ---
-name: bulletin-board-task-flow
-description: Handle PixelAgent Bulletin Board task workflow end-to-end. Use when asked to read board tasks, filter by assignee, prioritize P0→P2, start/doing/complete a task, or report task message content.
+name: L1_bulletin-board-task-flow
+level: 1
+description: "[L1 - Core Workflow] Handle PixelAgent Bulletin Board task workflow end-to-end. Use when asked to read board tasks, filter by assignee, prioritize P0→P2, start/doing/complete a task, or report task message content."
 ---
 
 # Bulletin Board Task Flow (PixelAgent)
