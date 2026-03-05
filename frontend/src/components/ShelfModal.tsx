@@ -131,6 +131,12 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
+function formatDate(iso: string): string {
+  const d = new Date(iso)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
 function fileIcon(entry: FileEntry): string {
   if (entry.isDir) return '\u{1F4C1}'  // 📁
   const ext = entry.name.split('.').pop()?.toLowerCase()
@@ -376,11 +382,10 @@ export function ShelfModal({ open, onClose, shelfId }: ShelfModalProps) {
                 }}>
                   {entry.name}{entry.isDir ? '/' : ''}
                 </span>
-                {!entry.isDir && (
-                  <span style={{ fontSize: 10, color: '#666', flexShrink: 0 }}>
-                    {formatSize(entry.size)}
-                  </span>
-                )}
+                <span style={{ fontSize: 10, color: '#555', flexShrink: 0, textAlign: 'right' }}>
+                  {!entry.isDir && <>{formatSize(entry.size)}<br /></>}
+                  {formatDate(entry.modifiedAt)}
+                </span>
               </div>
             ))}
           </div>
@@ -407,8 +412,8 @@ export function ShelfModal({ open, onClose, shelfId }: ShelfModalProps) {
                   marginBottom: 8, paddingBottom: 8, borderBottom: '1px solid #333',
                 }}>
                   <span style={{ fontSize: 13, fontWeight: 'bold' }}>{preview.name}</span>
-                  <span style={{ fontSize: 10, color: '#888' }}>
-                    {formatSize(preview.size)}
+                  <span style={{ fontSize: 10, color: '#888', textAlign: 'right' }}>
+                    {formatSize(preview.size)} | {formatDate(preview.modifiedAt)}
                   </span>
                 </div>
                 <FilePreview content={preview.content} name={preview.name} />
