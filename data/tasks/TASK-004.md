@@ -1,6 +1,6 @@
 # TASK-004 | DM Kyle (from GAIA)
 - assignee: astraea
-- status: todo
+- status: done
 - priority: P1
 - created: 2026-03-05T10:31:20.017Z
 
