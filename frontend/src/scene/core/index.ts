@@ -1,0 +1,6 @@
+// Core barrel — re-export everything so consumers can import from 'scene/core'
+export * from './sceneTypes'
+export * from './gameLoop'
+export * from './pathfinding'
+export * from './characters'
+export * from './collision'
