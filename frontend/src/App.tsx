@@ -94,11 +94,9 @@ function App() {
 
     if (obj?.kind === 'board') {
       setBoardOpen(true)
-      socket.emit('modal:toggled', { modal: 'board', open: true })
     }
     if (obj?.kind === 'dashboard') {
       setDashboardOpen(true)
-      socket.emit('modal:toggled', { modal: 'dashboard', open: true })
     }
     // Indoor exit/portal -> move selected agent to outdoor + switch view
     if (obj?.kind === 'exitDoor' || obj?.kind === 'portal') {
@@ -118,17 +116,15 @@ function App() {
       setShelfId(obj.decoKind as 'shelf1' | 'shelf2' | 'shelf3')
       setShelfOpen(true)
     }
-  }, [socket, sceneNav, moveAgentToScene])
+  }, [sceneNav, moveAgentToScene])
 
   const closeBoardModal = useCallback(() => {
     setBoardOpen(false)
-    socket.emit('modal:toggled', { modal: 'board', open: false })
-  }, [socket])
+  }, [])
 
   const closeDashboardModal = useCallback(() => {
     setDashboardOpen(false)
-    socket.emit('modal:toggled', { modal: 'dashboard', open: false })
-  }, [socket])
+  }, [])
 
   // Dashboard summary for RPG card data
   const [dashSummary, setDashSummary] = useState<DashboardSummary | null>(null)
@@ -213,23 +209,16 @@ function App() {
     const onBoardChanged = () => setBoardVersion((v) => v + 1)
     const onDashboardStale = () => fetchDashboardSummary().then(setDashSummary).catch(console.error)
 
-    const onModalToggled = (data: { modal: 'board' | 'dashboard'; open: boolean }) => {
-      if (data.modal === 'board') setBoardOpen(data.open)
-      if (data.modal === 'dashboard') setDashboardOpen(data.open)
-    }
-
     socket.on('agent:statusChanged', onAgentStatus)
     socket.on('agent:walk', onAgentWalk)
     socket.on('board:changed', onBoardChanged)
     socket.on('dashboard:stale', onDashboardStale)
-    socket.on('modal:toggled', onModalToggled)
 
     return () => {
       socket.off('agent:statusChanged', onAgentStatus)
       socket.off('agent:walk', onAgentWalk)
       socket.off('board:changed', onBoardChanged)
       socket.off('dashboard:stale', onDashboardStale)
-      socket.off('modal:toggled', onModalToggled)
     }
   }, [socket])
 
