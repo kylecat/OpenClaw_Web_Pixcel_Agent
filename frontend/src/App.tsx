@@ -171,6 +171,11 @@ function App() {
               sceneRef.current?.walkAgent(agent.id, target)
               sceneRef.current?.setStatusEmoji(agent.id, agent.emoji)
             }
+            // Sync position if server position differs from last known
+            if (old && agent.col != null && agent.row != null &&
+                (old.col !== agent.col || old.row !== agent.row)) {
+              sceneRef.current?.walkToTile(agent.id, agent.col, agent.row)
+            }
           }
           return latest
         })

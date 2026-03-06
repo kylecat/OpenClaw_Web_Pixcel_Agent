@@ -86,6 +86,28 @@ export const SceneCanvas = forwardRef<SceneCanvasHandle, SceneCanvasProps>(({ co
     walkToTile,
   ])
 
+  // Reactively add/remove characters when visibleAgents changes (e.g. scene switch from another tab)
+  const visibleAgentsRef = useRef(visibleAgents)
+  if (visibleAgents !== visibleAgentsRef.current) {
+    visibleAgentsRef.current = visibleAgents
+    const world = worldRef.current
+    if (visibleAgents) {
+      // Remove characters no longer visible
+      for (const id of [...world.characters.keys()]) {
+        if (!visibleAgents.has(id)) world.characters.delete(id)
+      }
+      // Add characters that should be visible but aren't yet
+      for (const id of visibleAgents) {
+        if (!world.characters.has(id)) {
+          // Create from config's initial world state to get correct home/emoji
+          const fresh = config.createWorldState()
+          const ch = fresh.characters.get(id)
+          if (ch) world.characters.set(id, ch)
+        }
+      }
+    }
+  }
+
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
