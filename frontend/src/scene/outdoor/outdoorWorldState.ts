@@ -135,15 +135,9 @@ const OUTDOOR_DECORATIONS: Decoration[] = [
     col: c, row: 4, kind: (c % 2 === 1 ? 'tree2' : 'tree1') as OutdoorDecorationKind,
   })),
 
-  // -- Left border (cols 0, 2, 4 — 3 cols instead of 6, rows 8-39) --
+  // -- Left border (col 0 only — 1 col, rows 8-39) --
   ...Array.from({ length: 16 }, (_, i) => ({
     col: 0, row: 8 + i * 2, kind: (i % 2 === 0 ? 'tree1' : 'tree2') as OutdoorDecorationKind,
-  })),
-  ...Array.from({ length: 16 }, (_, i) => ({
-    col: 2, row: 8 + i * 2, kind: (i % 2 === 0 ? 'tree2' : 'tree1') as OutdoorDecorationKind,
-  })),
-  ...Array.from({ length: 16 }, (_, i) => ({
-    col: 4, row: 8 + i * 2, kind: (i % 2 === 0 ? 'tree1' : 'tree2') as OutdoorDecorationKind,
   })),
 
   // -- Right border (cols 58, 60, 62, 63 — 4 cols instead of 8, rows 8-39) --

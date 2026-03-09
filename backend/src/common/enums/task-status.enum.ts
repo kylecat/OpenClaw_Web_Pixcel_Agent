@@ -13,5 +13,6 @@ export enum TaskPriority {
 export enum TaskAssignee {
   GAIA       = 'gaia',
   ASTRAEA    = 'astraea',
+  ANYONE     = 'anyone',
   UNASSIGNED = 'unassigned',
 }
