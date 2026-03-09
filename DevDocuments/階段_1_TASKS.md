@@ -158,7 +158,7 @@
 ### T9. Scene 抽象層重構
 - 優先級：P1
 - 工時：L
-- 狀態：todo
+- 狀態：done
 - 內容：
   - 定義 `SceneConfig` 介面（`frontend/src/scene/core/sceneTypes.ts`）
   - 重組 `frontend/src/scene/` 為 `core/` / `indoor/` / `outdoor/` 子目錄
@@ -179,7 +179,7 @@
 ### T10. 等距座標工具
 - 優先級：P1
 - 工時：S
-- 狀態：todo
+- 狀態：done
 - 內容：
   - 建立 `frontend/src/scene/outdoor/isoMath.ts`：
     - `isoToScreen(col, row)` — grid → screen 像素轉換
@@ -196,7 +196,7 @@
 ### T11. 室外 World State 與 Sprite Loader
 - 優先級：P1
 - 工時：M
-- 狀態：todo
+- 狀態：done
 - 內容：
   - 建立 `frontend/src/scene/outdoor/outdoorWorldState.ts`：
     - 16×12 grid，tile 類型：草地、泥地、水、小徑
@@ -217,7 +217,7 @@
 ### T12. 等距渲染器
 - 優先級：P1
 - 工時：L
-- 狀態：todo
+- 狀態：done
 - 內容：
   - 建立 `frontend/src/scene/outdoor/outdoorRenderer.ts`：
     - 地面 pass：逐行繪製鑽石 tile（`isoToScreen` 座標映射）
@@ -243,7 +243,7 @@
 ### T13. 場景切換導航
 - 優先級：P1
 - 工時：M
-- 狀態：todo
+- 狀態：done
 - 內容：
   - 建立 `frontend/src/hooks/useSceneNavigation.ts`：
     - 狀態機：`current: 'indoor' | 'outdoor'`，transition: idle / fading-out / fading-in
@@ -266,7 +266,7 @@
 ### T14. 溫室數據面板
 - 優先級：P1
 - 工時：M
-- 狀態：todo
+- 狀態：done
 - 內容：
   - **Backend**：建立 `backend/src/greenhouse/` NestJS module
     - `GET /api/greenhouse` — 列出栽培數據
@@ -288,7 +288,7 @@
 ### T15. 氣象站面板
 - 優先級：P1
 - 工時：M
-- 狀態：todo
+- 狀態：done
 - 內容：
   - **Backend**：建立 `backend/src/weather/` NestJS module
     - `GET /api/weather/current` — 目前天氣
@@ -309,7 +309,7 @@
 ### T16. 等距素材製作（含 8 方向角色 sprite）
 - 優先級：P1
 - 工時：M
-- 狀態：todo
+- 狀態：done
 - 內容：
   - 製作或取得所有等距像素素材：
     - 地面 tile：`iso_grass.png`、`iso_dirt.png`、`iso_water.png`、`iso_path.png`（64×32）
@@ -439,15 +439,15 @@ T0 ✅ → T1 ✅ → T2 ✅ → T3 ✅
                                    P0 freeze ✅
                                          ↓
 P1（室外等距農場）:
-  T9（Scene 抽象層重構）
+  T9 ✅（Scene 抽象層重構）
    ↓
-  T10（等距座標工具）
+  T10 ✅（等距座標工具）
    ↓
-  T11（室外 WorldState + Sprites）──→ T16（素材製作，可平行）
+  T11 ✅（室外 WorldState + Sprites）──→ T16 ✅（素材製作）
    ↓
-  T12（等距渲染器）
+  T12 ✅（等距渲染器）
    ↓ ↘ ↘
-  T13（場景切換）  T14（溫室面板）  T15（氣象站面板）  ← 三者可平行
+  T13 ✅（場景切換）  T14 ✅（溫室面板）  T15 ✅（氣象站面板）
                           ↓
                     T17（整合測試）
                           ↓
