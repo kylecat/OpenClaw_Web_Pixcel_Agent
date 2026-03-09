@@ -219,3 +219,14 @@
 ### P3 — 進階能力
 - 受控寫入（diff / confirm / rollback）
 - Policy / 角色權限
+
+### P4 — 多世界架構（發想中 💭）
+- World 模型 + 資料隔離（一 User 一 World）
+- Agent 註冊/登入 + 紙娃娃系統
+- WebSocket Room 隔離 + 跨世界傳送
+- Bulletin Board 改版（World Tasks / Internal / Alerts）
+- 場景 + 物件權限 Guard（Owner / Member / Guest）
+- World Lobby + Portal 跨世界導航
+- 書架 → 連結清單 / SKILL 學習區
+- 點數/鑽石經濟系統（懸賞任務）
+- 世界模板系統
