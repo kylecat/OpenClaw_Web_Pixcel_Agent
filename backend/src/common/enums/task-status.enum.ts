@@ -1,7 +1,8 @@
 export enum TaskStatus {
-  TODO  = 'todo',
-  DOING = 'doing',
-  DONE  = 'done',
+  TODO     = 'todo',
+  DOING    = 'doing',
+  DONE     = 'done',
+  ARCHIVED = 'archived',
 }
 
 export enum TaskPriority {
@@ -13,5 +14,6 @@ export enum TaskPriority {
 export enum TaskAssignee {
   GAIA       = 'gaia',
   ASTRAEA    = 'astraea',
+  ANYONE     = 'anyone',
   UNASSIGNED = 'unassigned',
 }

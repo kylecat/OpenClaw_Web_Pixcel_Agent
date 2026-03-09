@@ -1,6 +1,6 @@
 # UI Plan — OpenClaw Pixel Agent
 
-> 最後更新：2026-03-05（P0 完成，P1 室外場景已規劃）
+> 最後更新：2026-03-07（P0 完成，P1 T9~T16 完成，剩 T17 整合測試）
 
 ---
 
@@ -20,7 +20,7 @@
   - Hit-test 物件點選 + 碰撞邊界行走
 - **出口**：場景底部或門口區域 → 點擊切換至室外場景
 
-### B. 室外農場（Outdoor Scene）— P1 規劃中
+### B. 室外農場（Outdoor Scene）— P1 ✅ 核心完成（剩 T17 整合測試）
 
 - **視角**：等距 Isometric（2:1 鑽石 tile）
 - **Grid**：16×12 tiles，ISO_TILE_W = 64px，ISO_TILE_H = 32px
@@ -49,10 +49,10 @@
 
 | 面板 | 觸發方式 | 場景 | 狀態 |
 |------|----------|------|------|
-| **BoardModal** | 點擊佈告欄 | 室內 | ✅ 完成 |
+| **BoardModal** | 點擊佈告欄 | 室內 | ✅ 完成（含 MODIFY + anyone assignee） |
 | **DashboardModal** | 點擊儀表板 | 室內 | ✅ 完成 |
-| **GreenhousePanel** | 點擊溫室 | 室外 | P1 待做 |
-| **WeatherPanel** | 點擊氣象站 | 室外 | P1 待做 |
+| **GreenhousePanel** | 點擊溫室 | 室外 | ✅ 完成 (T14) |
+| **WeatherPanel** | 點擊氣象站 | 室外 | ✅ 完成 (T15) |
 | **AgentDetailDrawer** | 點擊角色 avatar | 兩者 | P2 待做 |
 
 ### BoardModal（佈告欄）
@@ -66,13 +66,13 @@
 - Host 基礎資源（CPU/RAM）
 - 最後更新時間
 
-### GreenhousePanel（溫室）— P1
+### GreenhousePanel（溫室）— P1 ✅ 完成
 - Tabs：栽培數據 / 參考文獻
 - 栽培數據：植物卡片（類型、階段 seed/sprout/growing/harvest、預計收成）
 - 參考文獻：連結列表
 - Backend API：`GET/POST/PATCH /api/greenhouse`
 
-### WeatherPanel（氣象站）— P1
+### WeatherPanel（氣象站）— P1 ✅ 完成
 - 即時天氣：溫度、濕度、風速、天氣圖示
 - 5 日預報：每日高低溫、降雨機率
 - 外部 API 整合（OpenWeatherMap / weatherapi.com）
@@ -199,13 +199,16 @@
 - Dashboard 只讀摘要 + OpenClaw 整合
 - 卡片 UX 修補 + WebSocket 即時同步
 
-### P1 — 室外等距農場
-- Scene 抽象層重構（SceneConfig + SceneCanvas）
-- 等距座標系統 + 渲染器
-- 室外 WorldState + 素材
-- 場景切換導航（淡入淡出）
-- 溫室面板（栽培數據 + 文獻）
-- 氣象站面板（即時天氣 + 預報）
+### P1 — 室外等距農場 ✅ 核心完成
+- ✅ Scene 抽象層重構（SceneConfig + SceneCanvas）
+- ✅ 等距座標系統 + 渲染器
+- ✅ 室外 WorldState + 素材
+- ✅ 場景切換導航（淡入淡出）
+- ✅ 溫室面板（栽培數據 + 文獻）
+- ✅ 氣象站面板（即時天氣 + 預報）
+- ✅ 等距素材升級 + 戶外場景微調
+- ✅ 跨分頁角色位置 / 場景同步
+- 🔲 T17 整合測試與打磨
 
 ### P2 — 擴展功能
 - Agent 詳情側欄
@@ -216,3 +219,14 @@
 ### P3 — 進階能力
 - 受控寫入（diff / confirm / rollback）
 - Policy / 角色權限
+
+### P4 — 多世界架構（發想中 💭）
+- World 模型 + 資料隔離（一 User 一 World）
+- Agent 註冊/登入 + 紙娃娃系統
+- WebSocket Room 隔離 + 跨世界傳送
+- Bulletin Board 改版（World Tasks / Internal / Alerts）
+- 場景 + 物件權限 Guard（Owner / Member / Guest）
+- World Lobby + Portal 跨世界導航
+- 書架 → 連結清單 / SKILL 學習區
+- 點數/鑽石經濟系統（懸賞任務）
+- 世界模板系統

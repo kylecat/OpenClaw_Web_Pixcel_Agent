@@ -158,7 +158,7 @@
 ### T9. Scene 抽象層重構
 - 優先級：P1
 - 工時：L
-- 狀態：todo
+- 狀態：done
 - 內容：
   - 定義 `SceneConfig` 介面（`frontend/src/scene/core/sceneTypes.ts`）
   - 重組 `frontend/src/scene/` 為 `core/` / `indoor/` / `outdoor/` 子目錄
@@ -179,7 +179,7 @@
 ### T10. 等距座標工具
 - 優先級：P1
 - 工時：S
-- 狀態：todo
+- 狀態：done
 - 內容：
   - 建立 `frontend/src/scene/outdoor/isoMath.ts`：
     - `isoToScreen(col, row)` — grid → screen 像素轉換
@@ -196,7 +196,7 @@
 ### T11. 室外 World State 與 Sprite Loader
 - 優先級：P1
 - 工時：M
-- 狀態：todo
+- 狀態：done
 - 內容：
   - 建立 `frontend/src/scene/outdoor/outdoorWorldState.ts`：
     - 16×12 grid，tile 類型：草地、泥地、水、小徑
@@ -217,7 +217,7 @@
 ### T12. 等距渲染器
 - 優先級：P1
 - 工時：L
-- 狀態：todo
+- 狀態：done
 - 內容：
   - 建立 `frontend/src/scene/outdoor/outdoorRenderer.ts`：
     - 地面 pass：逐行繪製鑽石 tile（`isoToScreen` 座標映射）
@@ -243,7 +243,7 @@
 ### T13. 場景切換導航
 - 優先級：P1
 - 工時：M
-- 狀態：todo
+- 狀態：done
 - 內容：
   - 建立 `frontend/src/hooks/useSceneNavigation.ts`：
     - 狀態機：`current: 'indoor' | 'outdoor'`，transition: idle / fading-out / fading-in
@@ -266,7 +266,7 @@
 ### T14. 溫室數據面板
 - 優先級：P1
 - 工時：M
-- 狀態：todo
+- 狀態：done
 - 內容：
   - **Backend**：建立 `backend/src/greenhouse/` NestJS module
     - `GET /api/greenhouse` — 列出栽培數據
@@ -288,7 +288,7 @@
 ### T15. 氣象站面板
 - 優先級：P1
 - 工時：M
-- 狀態：todo
+- 狀態：done
 - 內容：
   - **Backend**：建立 `backend/src/weather/` NestJS module
     - `GET /api/weather/current` — 目前天氣
@@ -309,7 +309,7 @@
 ### T16. 等距素材製作（含 8 方向角色 sprite）
 - 優先級：P1
 - 工時：M
-- 狀態：todo
+- 狀態：done
 - 內容：
   - 製作或取得所有等距像素素材：
     - 地面 tile：`iso_grass.png`、`iso_dirt.png`、`iso_water.png`、`iso_path.png`（64×32）
@@ -424,6 +424,282 @@
 
 ---
 
+## P4（多世界架構 — 發想中 💭）
+
+> **設計原則**：操作簡單、資料安全、容易交流
+>
+> 參考模型：Discord 伺服器 — 每個 User 擁有一個 World，透過 Portal 跨世界拜訪
+>
+> **核心規則**：一個 User = 一個 World（Server），Agent 可跨世界活動
+
+### 整體流程圖
+
+```text
+                        ┌─────────────────────────────┐
+                        │       Landing Page           │
+                        │   Login / Guest 預覽          │
+                        └──────────┬──────────────────┘
+                                   │
+                    ┌──────────────┼──────────────────┐
+                    │              │                   │
+               ┌────▼────┐  ┌─────▼─────┐  ┌─────────▼────────┐
+               │  Guest   │  │  Login    │  │  Register        │
+               │(唯讀預覽) │  │(OAuth/   │  │(建立 Agent +     │
+               │          │  │ API Key)  │  │ 建立 World)      │
+               └────┬─────┘  └─────┬─────┘  └─────────┬────────┘
+                    │              │                   │
+                    └──────────────┼───────────────────┘
+                                   ▼
+                        ┌─────────────────────┐
+                        │    World Lobby       │
+                        │  ┌───────────────┐   │
+                        │  │ My World ⭐    │   │
+                        │  │ World-A 🌍    │   │
+                        │  │ World-B 🌾    │   │
+                        │  │ [探索更多...]  │   │
+                        │  └───────┬───────┘   │
+                        │          │           │
+                        │  ┌───────▼───────┐   │
+                        │  │ World Tasks   │   │  ← 公開任務預覽
+                        │  │ 📋 懸賞列表   │   │    (跨世界任務板)
+                        │  └───────────────┘   │
+                        └──────────┬───────────┘
+                                   ▼
+                    ┌──────────────────────────────┐
+                    │        進入 World             │
+                    │                              │
+                    │  ┌────────┐    ┌──────────┐  │
+                    │  │ Indoor │◄──►│ Outdoor  │  │
+                    │  │ Office │    │ Farm     │  │
+                    │  └───┬────┘    └──────────┘  │
+                    │      │                       │
+                    │  ┌───▼──────────────────┐    │
+                    │  │ Portal 傳送門         │    │
+                    │  │ → World Lobby        │    │
+                    │  │ → 其他 World         │    │
+                    │  └──────────────────────┘    │
+                    └──────────────────────────────┘
+
+權限控制（每個 World 獨立設定）:
+┌──────────────────┬─────────┬──────────┬─────────┐
+│                  │  OWNER  │  MEMBER  │  GUEST  │
+├──────────────────┼─────────┼──────────┼─────────┤
+│ Indoor 場景      │   ✅    │    ✅    │   ✅    │
+│ Outdoor 場景     │   ✅    │    ✅    │   ❌    │
+├──────────────────┼─────────┼──────────┼─────────┤
+│ World Tasks      │  R/W    │   R/W    │   R     │
+│ Internal Tasks   │  R/W    │   R/W    │   ❌    │
+│ Dashboard        │  R/W    │    R     │   ❌    │
+│ Greenhouse       │  R/W    │   R/W    │   ❌    │
+│ Weather Station  │   R     │    R     │   R     │
+│ 書架(連結清單)   │  R/W    │    R     │   R     │
+│ SKILL 書架       │  R/W    │    R     │   R     │
+├──────────────────┼─────────┼──────────┼─────────┤
+│ 邀請成員         │   ✅    │    ❌    │   ❌    │
+│ 修改權限         │   ✅    │    ❌    │   ❌    │
+│ 世界模板設定     │   ✅    │    ❌    │   ❌    │
+└──────────────────┴─────────┴──────────┴─────────┘
+```
+
+### User 功能需求
+
+1. **Agent 管理**：User 可設定自己的 Agent 清單（外觀、名字），Agent 登入後自動對應人物
+2. **紙娃娃系統**：Agent 外觀可自訂（人物模板選擇 / 換裝），或提供預設模板
+3. **點數/鑽石經濟系統**：
+   - 儲值選項取得點數
+   - 用點數發布 World Task 懸賞，吸引其他 Agent 來領取
+   - Task 完成後點數轉移給執行者
+4. **一 User 一 World**：每人只能擁有一個 World（Server），未來可用世界模板套用（付費）
+5. **權限分享**：Owner 可設定場景 / 物件的存取權限，控制哪些內容對 Member / Guest 可見
+6. **書架 → 連結清單**：預設書架改為使用者管理的開放資料連結清單（URL bookmark），Owner 決定公開範圍
+7. **SKILL 書架**：保留現有版本，讓來訪的 Agent 可讀取/學習該世界所需的 SKILL
+
+### 場景物件改版對照
+
+| 現有物件 | P4 改版 | 說明 |
+| ---------- | --------- | ------- |
+| Bulletin Board | **World Tasks** (公開) + **Internal Tasks** (私有) + **Alerts** | 三 tab 分層，Guest 只看 World Tasks |
+| Dashboard | 不變，權限控制 | Owner/Member 可看，Guest 鎖定 |
+| 書架 (shelf) | **連結清單書架** | 使用者管理的 URL bookmark，可設公開/私有 |
+| SKILL 書架 | **SKILL 學習區** | 來訪 Agent 可讀取該世界的 skill 文件 |
+| Portal / Exit | **World Portal** | 傳送到 World Lobby 或直接跳其他 World |
+| 溫室 / 氣象站 | 不變，權限控制 | Member+ 可用 |
+
+### 經濟系統概念（點數/鑽石）
+
+```text
+User-A (Owner of World-A)          User-B (Owner of World-B)
+  │                                   │
+  │  發布 World Task                   │
+  │  "幫我爬取論文摘要"                │
+  │  懸賞: 💎 50                       │
+  │                                   │
+  │         World Task Board          │
+  │  ┌─────────────────────────┐      │
+  │  │ 📋 Task: 爬取論文摘要    │      │
+  │  │ 💎 50  │ Status: todo   │      │
+  │  │ [Accept]               │◄─────┤ User-B 的 Agent 領取
+  │  └─────────────────────────┘      │
+  │                                   │
+  │  ← Task 完成，💎 50 轉給 User-B    │
+```
+
+### T24. World 模型 + 資料隔離
+- 優先級：P4
+- 工時：L
+- 狀態：發想中
+- 內容：
+  - 定義 `World` 實體（id, displayName, ownerId, members, permissions）
+  - 資料目錄重組：`data/worlds/{worldId}/` 隔離 tasks / alerts / greenhouse
+  - API 命名空間：`/api/worlds/:worldId/...`
+  - 現有資料遷移腳本（搬入 `data/worlds/default/`）
+  - 向下相容：舊路由 alias 到 `worlds/default`
+- DoD：
+  - 多世界可獨立儲存資料
+  - 現有功能在 `default` 世界下不受影響
+- 依賴：T17
+
+### T25. Agent 註冊 + 角色分級 + 紙娃娃系統
+- 優先級：P4
+- 工時：L
+- 狀態：發想中
+- 內容：
+  - **Auth module**：`POST /api/auth/register`、`POST /api/auth/login`（OAuth / API Key）
+  - **Agent Profile**：全域檔案 `data/agents/{agentId}.json`（name, spriteSheet, emoji, model）
+  - **紙娃娃系統**：人物模板選擇 / 自訂 sprite 上傳
+  - **WorldRole 分級**：Owner / Member / Guest
+  - **加入世界**：`POST /api/worlds/:worldId/join`
+  - **Guest 模式**：未登入 = Guest，只能預覽公開內容
+- DoD：
+  - Agent 可註冊、登入、取得 token
+  - 加入世界後自動分配 home 座位
+  - Guest 存取受限於公開內容
+- 依賴：T24
+
+### T26. WebSocket Room 隔離 + 跨世界傳送
+- 優先級：P4
+- 工時：S
+- 狀態：發想中
+- 內容：
+  - Socket.IO auth handshake（token + worldId）
+  - 連線時加入 `world:{worldId}` room
+  - 所有 emit 改為 `server.to(worldId).emit(...)`
+  - `world:switch` 事件：leave 舊 room → join 新 room → 通知兩端
+- DoD：
+  - 不同世界的事件互不干擾
+  - 跨世界傳送時兩端收到 agent:left / agent:joined
+- 依賴：T24
+
+### T27. Bulletin Board 改版（World Tasks / Internal / Alerts）
+- 優先級：P4
+- 工時：M
+- 狀態：發想中
+- 內容：
+  - BoardModal 三 tab：World Tasks 🌍 / Internal Tasks 🔒 / Alerts ⚠️
+  - TaskItem 新增 `visibility: 'world' | 'internal'`
+  - World Tasks 對 Guest 公開唯讀
+  - World Task Board 跨世界可預覽（World Lobby 中聚合顯示）
+  - 點數懸賞欄位（預留 `bounty` 欄位）
+- DoD：
+  - Guest 只看到 World Tasks tab
+  - Member+ 看到全部三個 tab
+  - 跨世界 Task 預覽可用
+- 依賴：T24, T25
+
+### T28. 場景 + 物件權限 Guard + 鎖定視覺
+- 優先級：P4
+- 工時：M
+- 狀態：發想中
+- 內容：
+  - **Backend**：`WorldRoleGuard` + `@Roles()` decorator
+  - **Frontend**：
+    - 無權限物件半透明 + 🔒 icon
+    - 點擊鎖定物件 → toast 提示
+    - Outdoor 場景對 Guest 不可進入
+  - **WorldPermissions** 資料結構：per-scene / per-object 權限矩陣
+  - Owner 可在 World 設定面板自訂權限
+- DoD：
+  - Guest 點 Dashboard → 看到鎖頭 + 提示
+  - Guest 走到 Portal(outdoor) → 被擋
+  - Owner 可修改權限矩陣
+- 依賴：T25
+
+### T29. World Lobby + Portal UI + 跨世界導航
+- 優先級：P4
+- 工時：L
+- 狀態：發想中
+- 內容：
+  - **World Lobby 頁面**：
+    - My World（星號標記）
+    - 已加入的 World 清單
+    - 探索公開 World
+    - 跨世界 World Task 懸賞牆（聚合所有公開 World Tasks）
+  - **WorldSelectorModal**：Portal 點擊 → 列出可跳轉的 World
+  - **WorldContext**：React Context 持有 currentWorldId
+  - **動態角色載入**：`createWorldState(agents[])` 接受 API 回傳的角色列表
+  - **Sprite loader**：支援動態 URL + cache
+- DoD：
+  - Portal → 開啟 World 選擇器 → 進入其他 World
+  - World Lobby 可瀏覽公開世界
+  - 動態人數角色正確渲染
+- 依賴：T26, T28
+
+### T30. 書架改版 + SKILL 書架
+- 優先級：P4
+- 工時：M
+- 狀態：發想中
+- 內容：
+  - **連結清單書架**：
+    - 書架物件點擊 → 開啟 LinkShelfModal
+    - Owner 管理 URL bookmark（新增/刪除/排序/分類）
+    - 可設定每筆連結公開或私有
+    - Guest/Member 可讀取公開連結
+  - **SKILL 書架**：
+    - 獨立書架物件（現有 SKILL shelf）
+    - 顯示該世界的 skill 文件（`data/worlds/{worldId}/skills/`）
+    - 來訪 Agent 可讀取/學習
+    - Agent 學習後記錄到自己的 profile
+- DoD：
+  - 書架點擊 → 連結清單 modal
+  - SKILL 書架 → skill 文件列表
+  - Guest 可讀公開連結和 SKILL
+- 依賴：T24, T28
+
+### T31. 點數/鑽石經濟系統
+- 優先級：P4
+- 工時：L
+- 狀態：發想中
+- 內容：
+  - **Backend**：`backend/src/economy/` module
+    - User 餘額管理（points / diamonds）
+    - 儲值 API（先用 mock，未來接金流）
+    - Task 懸賞：建立 Task 時扣點、完成時轉點
+    - 交易紀錄 log
+  - **Frontend**：
+    - 餘額顯示（header 或 AgentCard）
+    - 建立 World Task 時可設定懸賞金額
+    - 懸賞 Task 在 World Lobby 中醒目顯示
+- DoD：
+  - 可用點數發布懸賞 Task
+  - Task 完成後點數正確轉移
+  - 餘額顯示正確
+- 依賴：T27, T29
+
+### T32. 世界模板系統
+- 優先級：P4
+- 工時：M
+- 狀態：發想中
+- 內容：
+  - World 模板定義：預設場景佈局 + 裝飾品 + 書架內容
+  - 套用模板建立新 World
+  - 模板市集（未來可付費購買）
+- DoD：
+  - 可從模板一鍵建立 World
+  - 模板列表可瀏覽
+- 依賴：T24, T29
+
+---
+
 ## 建議執行順序
 
 ```text
@@ -439,21 +715,34 @@ T0 ✅ → T1 ✅ → T2 ✅ → T3 ✅
                                    P0 freeze ✅
                                          ↓
 P1（室外等距農場）:
-  T9（Scene 抽象層重構）
+  T9 ✅（Scene 抽象層重構）
    ↓
-  T10（等距座標工具）
+  T10 ✅（等距座標工具）
    ↓
-  T11（室外 WorldState + Sprites）──→ T16（素材製作，可平行）
+  T11 ✅（室外 WorldState + Sprites）──→ T16 ✅（素材製作）
    ↓
-  T12（等距渲染器）
+  T12 ✅（等距渲染器）
    ↓ ↘ ↘
-  T13（場景切換）  T14（溫室面板）  T15（氣象站面板）  ← 三者可平行
+  T13 ✅（場景切換）  T14 ✅（溫室面板）  T15 ✅（氣象站面板）
                           ↓
                     T17（整合測試）
                           ↓
                     P1 freeze → demo
                           ↓
 P2（T18–T21）→ P3（T22–T23）
+                          ↓
+P4（多世界架構 — 發想中）:
+  T24（World 模型 + 資料隔離）
+   ↓ ↘
+  T25（Agent 註冊 + 紙娃娃）  T26（WS Room 隔離）
+   ↓                            ↓
+  T28（權限 Guard + 鎖定視覺）──┘
+   ↓ ↘
+  T27（Board 改版 3 tab）  T30（書架 + SKILL）
+   ↓                         ↓
+  T29（World Lobby + Portal UI）
+   ↓ ↘
+  T31（點數/鑽石經濟）  T32（世界模板）
 ```
 
 ---
@@ -486,6 +775,17 @@ P2（T18–T21）→ P3（T22–T23）
 - 風險：IoT 資料源不穩
   - 備案：先用 mock/快取，來源恢復後回填
 
+### P4 風險
+
+- 風險：資料遷移（單一目錄 → 多世界目錄）可能破壞現有功能
+  - 備案：向下相容 alias（舊路由指向 `worlds/default`）；遷移腳本可回滾
+- 風險：檔案儲存不適合大量世界
+  - 備案：先用檔案系統，規模增長後遷移 SQLite（每世界一個 .db）
+- 風險：動態角色 sprite 載入效能
+  - 備案：sprite cache + lazy loading；限制每世界同時在線人數
+- 風險：點數經濟系統濫用（刷點、假完成）
+  - 備案：Owner 審核制；交易紀錄可追溯；先以 mock 點數測試流程
+
 ---
 
 ## 驗收清單
@@ -507,3 +807,14 @@ P2（T18–T21）→ P3（T22–T23）
 - [ ] 點小木屋 → 淡入室內場景；室內出口 → 淡入室外
 - [ ] 場景切換跨分頁 WebSocket 同步
 - [ ] Jetson 上穩定 60fps
+
+### 多世界架構（P4 — 發想中）
+
+- [ ] 多世界資料隔離正確（不同 World 的 tasks 互不干擾）
+- [ ] Agent 可註冊、登入、加入世界
+- [ ] Guest 只看到 World Tasks，無法進入 Outdoor 或存取私有物件
+- [ ] Portal → World Lobby → 選擇並進入其他 World
+- [ ] 鎖定物件顯示半透明 + 🔒，點擊有提示
+- [ ] WebSocket 事件隔離（不同 World 不互相干擾）
+- [ ] 書架顯示連結清單，SKILL 書架可讀取 skill 文件
+- [ ] 點數可用於發布/領取 World Task 懸賞

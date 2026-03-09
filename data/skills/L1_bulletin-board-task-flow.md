@@ -39,9 +39,12 @@ curl ${PIXELAGENT_API}/board/tasks
 
 ### Step 2 — Filter & Prioritize
 
-- Keep only tasks where `assignee == ${AGENT_ID}`.
 - Keep only tasks with status `todo` or `doing`.
-- Sort by priority: **P0 → P1 → P2** (highest first).
+- **Priority order by assignee**:
+  1. Tasks where `assignee == ${AGENT_ID}` — do these **first**.
+  2. Tasks where `assignee == "anyone"` — do these **after** all personal tasks are done. **Before starting an `anyone` task, DM the user (orchestrator) for confirmation.**
+  3. Ignore tasks assigned to other agents or `unassigned`.
+- Within each group, sort by priority: **P0 → P1 → P2** (highest first).
 
 ### Step 3 — Character Operation SOP
 
@@ -100,10 +103,12 @@ After completing each task, report back with:
 
 ## Rules
 
-1. **Only execute tasks assigned to you** (`assignee == ${AGENT_ID}`). Never touch other agents' tasks.
-2. **External actions** (DM, send message, API calls to third-party services) are only allowed when permitted by the current chat/session policy.
-3. **Fallback**: If UI interaction is blocked or unavailable, always fall back to the backend API.
-4. **Idempotency**: Before starting a task, check its current status. Do not re-start a task that is already `doing` or `done`.
+1. **Personal tasks first**: Execute tasks where `assignee == ${AGENT_ID}` before anything else.
+2. **`anyone` tasks require confirmation**: For tasks with `assignee == "anyone"`, DM the user (orchestrator) to confirm before starting. Do NOT auto-start `anyone` tasks.
+3. **Never touch other agents' tasks**: Only execute tasks assigned to you or to `anyone`. Never modify tasks assigned to another specific agent.
+4. **External actions** (DM, send message, API calls to third-party services) are only allowed when permitted by the current chat/session policy.
+5. **Fallback**: If UI interaction is blocked or unavailable, always fall back to the backend API.
+6. **Idempotency**: Before starting a task, check its current status. Do not re-start a task that is already `doing` or `done`.
 
 ## API Reference
 

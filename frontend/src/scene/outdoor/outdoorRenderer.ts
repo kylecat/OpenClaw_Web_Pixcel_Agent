@@ -1,27 +1,22 @@
-import type { WorldState, SelectedObject, DecorationKind, OutdoorTileKind } from '../core/sceneTypes'
+import type { WorldState, SelectedObject, OutdoorTileKind } from '../core/sceneTypes'
 import type { OutdoorSprites } from './outdoorSprites'
+import {
+  ISO_CHAR_FRAME_W, ISO_CHAR_FRAME_H,
+  ISO_DIR_ROW, GRID_TO_ISO_DIR,
+  ISO_WALK_FRAMES, ISO_IDLE_FRAME,
+} from './outdoorSprites'
 import { TILE_SIZE, tileCenter } from '../core/characters'
-import { CHAR_FRAME_W, CHAR_FRAME_H, DIR_ROW, WALK_FRAMES, IDLE_FRAME } from '../indoor/indoorSprites'
 import { ISO_TILE_W, ISO_TILE_H, isoToScreen, isoDepthSort, drawIsoDiamond } from './isoMath'
 import { OUTDOOR_COLS, OUTDOOR_ROWS, OUTDOOR_DECO_TILE_SIZE } from './outdoorWorldState'
 
-// Character sprite drawn at 4x scale (reuse indoor sprites for Phase 1)
-const CHAR_SCALE = 4
-const CHAR_DW = CHAR_FRAME_W * CHAR_SCALE  // 64
-const CHAR_DH = CHAR_FRAME_H * CHAR_SCALE  // 128
-
-// ISO direction remapping: grid directions → sprite sheet directions
-// Grid UP (north) → NW → use LEFT sprite; DOWN → SE → DOWN; LEFT → SW → LEFT mirror; RIGHT → NE → RIGHT
-const ISO_DIR_REMAP: Record<string, string> = {
-  UP:    'LEFT',
-  DOWN:  'DOWN',
-  LEFT:  'LEFT',
-  RIGHT: 'RIGHT',
-}
+// 8-direction character sprite: 4× scale from 32×24 source → 128×96 drawn
+const ISO_CHAR_SCALE = 4
+const ISO_CHAR_DW = ISO_CHAR_FRAME_W * ISO_CHAR_SCALE  // 128
+const ISO_CHAR_DH = ISO_CHAR_FRAME_H * ISO_CHAR_SCALE  // 96
 
 // Canvas logical dimensions — isometric grid needs more width than height.
 // Origin is placed so that tile (0,0) top-center starts at (originX, originY).
-// With OUTDOOR_COLS=16 and OUTDOOR_ROWS=12, the grid spans roughly:
+// The grid spans roughly:
 //   x: from -(ROWS-1)*halfW to +(COLS-1)*halfW
 //   y: from 0 to (COLS+ROWS-2)*halfH
 const HALF_W = ISO_TILE_W / 2
@@ -32,8 +27,12 @@ const GRID_MAX_X = (OUTDOOR_COLS - 1) * HALF_W
 const GRID_MAX_Y = (OUTDOOR_COLS + OUTDOOR_ROWS - 2) * HALF_H + ISO_TILE_H
 
 const PAD = 48  // px padding around the grid
-export const ISO_CANVAS_W = (GRID_MAX_X - GRID_MIN_X) + ISO_TILE_W + PAD * 2
-export const ISO_CANVAS_H = GRID_MAX_Y + PAD * 2
+// Full logical size (used internally for coordinate math)
+const LOGICAL_W = (GRID_MAX_X - GRID_MIN_X) + ISO_TILE_W + PAD * 2
+const LOGICAL_H = GRID_MAX_Y + PAD * 2
+// Exported canvas size is halved to keep display manageable
+export const ISO_CANVAS_W = LOGICAL_W / 2
+export const ISO_CANVAS_H = LOGICAL_H / 2
 
 // Origin: offset so tile (0,0) is horizontally centered and vertically padded
 export const ISO_ORIGIN_X = -GRID_MIN_X + HALF_W + PAD
@@ -52,14 +51,12 @@ export function renderOutdoor(
 ): void {
   ctx.clearRect(0, 0, canvas.width, canvas.height)
 
-  const scaleX = canvas.width / ISO_CANVAS_W
-  const scaleY = canvas.height / ISO_CANVAS_H
+  const scaleX = canvas.width / LOGICAL_W
+  const scaleY = canvas.height / LOGICAL_H
   ctx.save()
   ctx.setTransform(scaleX, 0, 0, scaleY, 0, 0)
 
-  // Background
-  ctx.fillStyle = '#2d5a1e'
-  ctx.fillRect(0, 0, ISO_CANVAS_W, ISO_CANVAS_H)
+  // Transparent background (no fill — let page background show through)
 
   // -- Ground pass: draw tiles back-to-front (row by row, col by col) --
   for (let row = 0; row < world.rows; row++) {
@@ -68,9 +65,10 @@ export function renderOutdoor(
       const { x: sx, y: sy } = isoToScreen(col, row, ISO_ORIGIN_X, ISO_ORIGIN_Y)
 
       if (sprites) {
-        const tileCanvas = sprites.tiles[tile.kind as OutdoorTileKind]
-        if (tileCanvas) {
-          ctx.drawImage(tileCanvas, sx - HALF_W, sy, ISO_TILE_W, ISO_TILE_H)
+        const tileImg = sprites.tiles[tile.kind as OutdoorTileKind]
+        if (tileImg) {
+          ctx.imageSmoothingEnabled = false
+          ctx.drawImage(tileImg, sx - HALF_W, sy, ISO_TILE_W, ISO_TILE_H)
         }
       } else {
         // Fallback: colored diamond
@@ -142,10 +140,21 @@ export function renderOutdoor(
     renderSelection(ctx, world, selectedObject)
   }
 
+  // -- Compass labels at grid corners --
+  renderCompass(ctx, world)
+
   ctx.restore()
 }
 
 // -- Decoration rendering --
+// In isometric 2:1, a footprint of [cols, rows] tiles forms a diamond:
+//   screen width  = (cols + rows) * HALF_W
+//   screen height = (cols + rows) * HALF_H
+// The 4 corners of the diamond in screen space:
+//   top    = isoToScreen(col, row)
+//   right  = isoToScreen(col + cols, row)
+//   bottom = isoToScreen(col + cols, row + rows)
+//   left   = isoToScreen(col, row + rows)
 function renderDecoration(
   ctx: CanvasRenderingContext2D,
   world: WorldState,
@@ -155,53 +164,66 @@ function renderDecoration(
   const deco = world.decorations[index]
   if (!deco) return
   const size = OUTDOOR_DECO_TILE_SIZE[deco.kind as keyof typeof OUTDOOR_DECO_TILE_SIZE] ?? [1, 1]
-  // Anchor at center of decoration footprint
-  const centerCol = deco.col + size[0] / 2
-  const centerRow = deco.row + size[1] / 2
-  const { x: sx, y: sy } = isoToScreen(centerCol, centerRow, ISO_ORIGIN_X, ISO_ORIGIN_Y)
-  const dw = size[0] * ISO_TILE_W
-  const dh = size[1] * ISO_TILE_H
+  const [cols, rows] = size
 
-  if (sprites?.decorations[deco.kind as keyof typeof sprites.decorations]) {
-    const img = sprites.decorations[deco.kind as keyof typeof sprites.decorations]!
-    ctx.drawImage(img, sx - dw / 2, sy - dh / 2, dw, dh)
+  // Isometric diamond screen extents
+  const diamondW = (cols + rows) * HALF_W
+  // Bottom vertex of the footprint diamond
+  const bottom = isoToScreen(deco.col + cols, deco.row + rows, ISO_ORIGIN_X, ISO_ORIGIN_Y)
+  const bottomY = bottom.y  // bottom vertex of the footprint diamond
+  // Center X of the diamond
+  const centerCol = deco.col + cols / 2
+  const centerRow = deco.row + rows / 2
+  const { x: cx } = isoToScreen(centerCol, centerRow, ISO_ORIGIN_X, ISO_ORIGIN_Y)
+
+  const img = sprites?.decorations[deco.kind as keyof typeof sprites.decorations]
+  if (img) {
+    // Scale the image to fit the isometric diamond width, preserving aspect ratio.
+    // Anchor at bottom-center of the footprint diamond.
+    const naturalW = (img as HTMLImageElement).naturalWidth ?? img.width
+    const naturalH = (img as HTMLImageElement).naturalHeight ?? img.height
+    const scale = diamondW / naturalW
+    const dw = diamondW
+    const dh = naturalH * scale
+    const drawX = cx - dw / 2
+    const drawY = bottomY - dh
+    ctx.imageSmoothingEnabled = false
+    ctx.drawImage(img, drawX, drawY, dw, dh)
   } else {
     // Fallback: colored diamond
+    const { x: sx, y: sy } = isoToScreen(centerCol, centerRow, ISO_ORIGIN_X, ISO_ORIGIN_Y)
+    const diamondH = (cols + rows) * HALF_H
     ctx.fillStyle = 'rgba(100,100,100,0.5)'
-    drawIsoDiamond(ctx, sx, sy - dh / 2 + HALF_H, dw, dh)
+    drawIsoDiamond(ctx, sx, sy, diamondW, diamondH)
     ctx.fill()
     ctx.strokeStyle = 'rgba(0,0,0,0.3)'
     ctx.lineWidth = 1
     ctx.stroke()
-    // Label
     ctx.fillStyle = '#fff'
     ctx.font = 'bold 9px monospace'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    ctx.fillText(deco.kind, sx, sy)
+    ctx.fillText(deco.kind, sx, sy + HALF_H)
   }
 }
 
-// -- Character rendering (Phase 1: reuse indoor 4-direction sprites) --
+// -- Character rendering (8-direction sprite sheets) --
 function renderCharacter(
   ctx: CanvasRenderingContext2D,
   world: WorldState,
-  _sprites: OutdoorSprites | null,
+  sprites: OutdoorSprites | null,
   charId: string,
 ): void {
   const ch = world.characters.get(charId)
   if (!ch) return
 
   // Convert character grid position to isometric screen coords
-  // ch.x/y are in tile-pixel space (center of tile), convert to grid fractions
   const gridCol = ch.x / TILE_SIZE
   const gridRow = ch.y / TILE_SIZE
   const { x: sx, y: sy } = isoToScreen(gridCol, gridRow, ISO_ORIGIN_X, ISO_ORIGIN_Y)
 
   // Character anchor: feet at tile center, sprite extends upward
   const footY = sy + HALF_H
-  const drawX = sx - CHAR_DW / 2
-  const drawY = footY - CHAR_DH
 
   // Shadow ellipse
   ctx.fillStyle = 'rgba(0,0,0,0.3)'
@@ -209,25 +231,40 @@ function renderCharacter(
   ctx.ellipse(sx, footY - 2, 14, 5, 0, 0, Math.PI * 2)
   ctx.fill()
 
-  // Try to load indoor character sprites (shared between scenes)
-  // Access via global sprite loading — for now use emoji fallback
-  // Phase 1: emoji-based rendering (character sprites loaded in T16)
-  const remappedDir = ISO_DIR_REMAP[ch.dir] ?? ch.dir
-  void remappedDir  // will be used when sprite sheets are available
+  // 8-direction sprite sheet rendering
+  const sheet = sprites?.characters[charId]
+  if (sheet) {
+    const isoDir = GRID_TO_ISO_DIR[ch.dir] ?? 'S'
+    const dirRow = ISO_DIR_ROW[isoDir] ?? 0
+    const frame = ch.state === 'WALK' ? (ch.frame % ISO_WALK_FRAMES) : ISO_IDLE_FRAME
 
-  // Emoji fallback (until sprite sheets are integrated)
-  const bounce = ch.state === 'WALK'
-    ? Math.sin(ch.frameTimer * Math.PI / 0.12) * 2
-    : 0
-  ctx.font = `${TILE_SIZE * 0.5}px sans-serif`
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'bottom'
-  ctx.fillText(ch.emoji, sx, footY - 4 + bounce)
+    const srcX = frame * ISO_CHAR_FRAME_W
+    const srcY = dirRow * ISO_CHAR_FRAME_H
 
-  // Status emoji bubble
+    const drawX = sx - ISO_CHAR_DW / 2
+    const drawY = footY - ISO_CHAR_DH
+
+    ctx.imageSmoothingEnabled = false
+    ctx.drawImage(
+      sheet,
+      srcX, srcY, ISO_CHAR_FRAME_W, ISO_CHAR_FRAME_H,
+      drawX, drawY, ISO_CHAR_DW, ISO_CHAR_DH,
+    )
+  } else {
+    // Emoji fallback
+    const bounce = ch.state === 'WALK'
+      ? Math.sin(ch.frameTimer * Math.PI / 0.12) * 2
+      : 0
+    ctx.font = `${TILE_SIZE * 0.5}px sans-serif`
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'bottom'
+    ctx.fillText(ch.emoji, sx, footY - 4 + bounce)
+  }
+
+  // Status emoji bubble (top-right of character)
   const bubbleR = 14
   const bx = sx + 20
-  const by = drawY + bubbleR + 8
+  const by = footY - ISO_CHAR_DH + bubbleR + 8
   ctx.beginPath()
   ctx.arc(bx, by, bubbleR, 0, Math.PI * 2)
   ctx.fillStyle = '#ffffff'
@@ -305,6 +342,22 @@ function renderPaths(ctx: CanvasRenderingContext2D, world: WorldState): void {
   }
 }
 
+// Helper: draw an isometric selection diamond for a decoration footprint
+// Uses the actual 4 vertices of the footprint (asymmetric when cols ≠ rows)
+function strokeDecoFootprint(ctx: CanvasRenderingContext2D, col: number, row: number, cols: number, rows: number): void {
+  const top    = isoToScreen(col,        row,        ISO_ORIGIN_X, ISO_ORIGIN_Y)
+  const right  = isoToScreen(col + cols, row,        ISO_ORIGIN_X, ISO_ORIGIN_Y)
+  const bottom = isoToScreen(col + cols, row + rows, ISO_ORIGIN_X, ISO_ORIGIN_Y)
+  const left   = isoToScreen(col,        row + rows, ISO_ORIGIN_X, ISO_ORIGIN_Y)
+  ctx.beginPath()
+  ctx.moveTo(top.x, top.y)
+  ctx.lineTo(right.x, right.y)
+  ctx.lineTo(bottom.x, bottom.y)
+  ctx.lineTo(left.x, left.y)
+  ctx.closePath()
+  ctx.stroke()
+}
+
 // -- Selection highlight (diamond outline) --
 function renderSelection(
   ctx: CanvasRenderingContext2D,
@@ -326,48 +379,57 @@ function renderSelection(
       drawIsoDiamond(ctx, x, y)
       ctx.stroke()
     }
-  } else if (sel.kind === 'decoration') {
-    const deco = world.decorations[sel.index]
+  } else {
+    // Find the decoration for any selection type
+    let deco: typeof world.decorations[number] | undefined
+    if (sel.kind === 'decoration') {
+      deco = world.decorations[sel.index]
+    } else if (sel.kind === 'greenhouse') {
+      const ghKinds = ['greenhouse1', 'greenhouse2', 'greenhouse3']
+      deco = world.decorations.find(d => d.kind === ghKinds[sel.index])
+    } else if (sel.kind === 'weatherStation') {
+      deco = world.decorations.find(d => d.kind === 'weatherStation')
+    } else if (sel.kind === 'cabin') {
+      deco = world.decorations.find(d => d.kind === 'cabin')
+    }
     if (deco) {
       const size = OUTDOOR_DECO_TILE_SIZE[deco.kind as keyof typeof OUTDOOR_DECO_TILE_SIZE] ?? [1, 1]
-      const cc = deco.col + size[0] / 2
-      const cr = deco.row + size[1] / 2
-      const { x, y } = isoToScreen(cc, cr, ISO_ORIGIN_X, ISO_ORIGIN_Y)
-      drawIsoDiamond(ctx, x, y - (size[1] - 1) * HALF_H, size[0] * ISO_TILE_W, size[1] * ISO_TILE_H)
-      ctx.stroke()
-    }
-  } else if (sel.kind === 'greenhouse') {
-    const ghKinds = ['greenhouse1', 'greenhouse2', 'greenhouse3']
-    const deco = world.decorations.find(d => d.kind === ghKinds[sel.index])
-    if (deco) {
-      const size = OUTDOOR_DECO_TILE_SIZE[deco.kind as keyof typeof OUTDOOR_DECO_TILE_SIZE] ?? [4, 3]
-      const cc = deco.col + size[0] / 2
-      const cr = deco.row + size[1] / 2
-      const { x, y } = isoToScreen(cc, cr, ISO_ORIGIN_X, ISO_ORIGIN_Y)
-      drawIsoDiamond(ctx, x, y - (size[1] - 1) * HALF_H, size[0] * ISO_TILE_W, size[1] * ISO_TILE_H)
-      ctx.stroke()
-    }
-  } else if (sel.kind === 'weatherStation') {
-    const deco = world.decorations.find(d => d.kind === 'weatherStation')
-    if (deco) {
-      const size = OUTDOOR_DECO_TILE_SIZE.weatherStation ?? [2, 2]
-      const cc = deco.col + size[0] / 2
-      const cr = deco.row + size[1] / 2
-      const { x, y } = isoToScreen(cc, cr, ISO_ORIGIN_X, ISO_ORIGIN_Y)
-      drawIsoDiamond(ctx, x, y - (size[1] - 1) * HALF_H, size[0] * ISO_TILE_W, size[1] * ISO_TILE_H)
-      ctx.stroke()
-    }
-  } else if (sel.kind === 'cabin') {
-    const deco = world.decorations.find(d => d.kind === 'cabin')
-    if (deco) {
-      const size = OUTDOOR_DECO_TILE_SIZE.cabin ?? [3, 3]
-      const cc = deco.col + size[0] / 2
-      const cr = deco.row + size[1] / 2
-      const { x, y } = isoToScreen(cc, cr, ISO_ORIGIN_X, ISO_ORIGIN_Y)
-      drawIsoDiamond(ctx, x, y - (size[1] - 1) * HALF_H, size[0] * ISO_TILE_W, size[1] * ISO_TILE_H)
-      ctx.stroke()
+      strokeDecoFootprint(ctx, deco.col, deco.row, size[0], size[1])
     }
   }
 
+  ctx.restore()
+}
+
+// -- Compass direction labels at grid edge midpoints --
+// N/S = row axis, E/W = column axis
+function renderCompass(ctx: CanvasRenderingContext2D, world: WorldState): void {
+  const maxCol = world.cols - 1
+  const maxRow = world.rows - 1
+
+  // 4 vertices of the isometric diamond
+  const vtxTop    = isoToScreen(0, 0, ISO_ORIGIN_X, ISO_ORIGIN_Y)             // NW corner
+  const vtxRight  = isoToScreen(maxCol, 0, ISO_ORIGIN_X, ISO_ORIGIN_Y)        // NE corner
+  const vtxBottom = isoToScreen(maxCol, maxRow, ISO_ORIGIN_X, ISO_ORIGIN_Y)    // SE corner
+  const vtxLeft   = isoToScreen(0, maxRow, ISO_ORIGIN_X, ISO_ORIGIN_Y)        // SW corner
+
+  // Edge midpoints — labels go here
+  const midN = { x: (vtxTop.x + vtxRight.x) / 2,   y: (vtxTop.y + vtxRight.y) / 2 }    // top-right edge
+  const midS = { x: (vtxLeft.x + vtxBottom.x) / 2,  y: (vtxLeft.y + vtxBottom.y) / 2 }  // bottom-left edge
+  const midE = { x: (vtxRight.x + vtxBottom.x) / 2, y: (vtxRight.y + vtxBottom.y) / 2 } // bottom-right edge
+  const midW = { x: (vtxTop.x + vtxLeft.x) / 2,     y: (vtxTop.y + vtxLeft.y) / 2 }    // top-left edge
+
+  // Offset outward from edge (further out to the margins)
+  const OFF = 130
+  ctx.save()
+  ctx.font = 'bold 75px monospace'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillStyle = 'rgba(255,255,255,0.5)'
+
+  ctx.fillText('N/-Row', midN.x + OFF, midN.y - OFF)
+  ctx.fillText('S/+Row', midS.x - OFF, midS.y + OFF)
+  ctx.fillText('E/+Col', midE.x + OFF, midE.y + OFF)
+  ctx.fillText('W/-Col', midW.x - OFF, midW.y - OFF)
   ctx.restore()
 }

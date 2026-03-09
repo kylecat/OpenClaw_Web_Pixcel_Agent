@@ -30,6 +30,7 @@ const STATUS_COLOR: Record<string, string> = {
   todo: '#888',
   doing: '#f39c12',
   done: '#27ae60',
+  archived: '#6c5ce7',
 }
 
 const LEVEL_COLOR: Record<string, string> = {
@@ -171,7 +172,7 @@ function TaskBoardTab({ tasks, showAdd, onToggleAdd, onReload }: {
   const [filterPriority, setFilterPriority] = useState('all')
 
   const filtered = tasks.filter(t =>
-    (filterStatus === 'all' || t.status === filterStatus) &&
+    (filterStatus === 'all' ? t.status !== 'archived' : t.status === filterStatus) &&
     (filterAssignee === 'all' || t.assignee === filterAssignee) &&
     (filterPriority === 'all' || t.priority === filterPriority),
   )
@@ -185,11 +186,13 @@ function TaskBoardTab({ tasks, showAdd, onToggleAdd, onReload }: {
           <option value="todo">todo</option>
           <option value="doing">doing</option>
           <option value="done">done</option>
+          <option value="archived">archived</option>
         </select>
         <select value={filterAssignee} onChange={e => setFilterAssignee(e.target.value)} style={filterSelect}>
           <option value="all">All Assignee</option>
           <option value="gaia">Gaia</option>
           <option value="astraea">Astraea</option>
+          <option value="anyone">Anyone</option>
           <option value="unassigned">unassigned</option>
         </select>
         <select value={filterPriority} onChange={e => setFilterPriority(e.target.value)} style={filterSelect}>
@@ -226,6 +229,12 @@ function TaskBoardTab({ tasks, showAdd, onToggleAdd, onReload }: {
 function TaskCard({ task, onReload }: { task: TaskItem; onReload: () => void }) {
   const [expanded, setExpanded] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const [editTitle, setEditTitle] = useState(task.title)
+  const [editContent, setEditContent] = useState(task.content)
+  const [editAssignee, setEditAssignee] = useState(task.assignee)
+  const [editPriority, setEditPriority] = useState(task.priority)
+  const [saving, setSaving] = useState(false)
 
   const handleStatusChange = async (status: string) => {
     await updateTask(task.id, { status })
@@ -248,16 +257,102 @@ function TaskCard({ task, onReload }: { task: TaskItem; onReload: () => void }) 
     onReload()
   }
 
+  const handleModifySave = async () => {
+    setSaving(true)
+    try {
+      await updateTask(task.id, {
+        title: editTitle.trim(),
+        content: editContent.trim(),
+        assignee: editAssignee,
+        priority: editPriority,
+      })
+      setEditing(false)
+      onReload()
+    } catch (e) {
+      console.error('modify task failed', e)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleModifyCancel = () => {
+    setEditTitle(task.title)
+    setEditContent(task.content)
+    setEditAssignee(task.assignee)
+    setEditPriority(task.priority)
+    setEditing(false)
+  }
+
+  const handleArchive = async () => {
+    await updateTask(task.id, { status: 'archived' })
+    onReload()
+  }
+
   const isTodo = task.status === 'todo'
   const isDoing = task.status === 'doing'
   const isDone = task.status === 'done'
-  const needsCollapse = task.content.length > 100
+  const isArchived = task.status === 'archived'
+  const needsCollapse = task.content.length > 100 || task.content.split('\n').length > 2
+
+  if (editing) {
+    return (
+      <div style={{
+        border: '1px solid #3a6ea5', borderRadius: 8, padding: 10, marginBottom: 8,
+        background: '#2a2a3e',
+      }}>
+        <div style={{ fontSize: 11, color: '#3a6ea5', marginBottom: 6, fontWeight: 'bold' }}>
+          Modify {task.id}
+        </div>
+        <input
+          value={editTitle}
+          onChange={e => setEditTitle(e.target.value)}
+          placeholder="Task title..."
+          style={{ ...inputStyle, width: '100%', marginBottom: 8 }}
+          autoFocus
+        />
+        <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+          <div>
+            <label style={labelStyle}>Assignee</label>
+            <select value={editAssignee} onChange={e => setEditAssignee(e.target.value)} style={selectStyle}>
+              <option value="unassigned">unassigned</option>
+              <option value="gaia">Gaia</option>
+              <option value="astraea">Astraea</option>
+              <option value="anyone">Anyone</option>
+            </select>
+          </div>
+          <div>
+            <label style={labelStyle}>Priority</label>
+            <select value={editPriority} onChange={e => setEditPriority(e.target.value)} style={selectStyle}>
+              <option value="P0">P0</option>
+              <option value="P1">P1</option>
+              <option value="P2">P2</option>
+            </select>
+          </div>
+        </div>
+        <textarea
+          value={editContent}
+          onChange={e => setEditContent(e.target.value)}
+          placeholder="Content..."
+          rows={4}
+          style={{ ...inputStyle, width: '100%', resize: 'vertical', marginBottom: 8 }}
+        />
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={handleModifySave} disabled={saving || !editTitle.trim()} style={btnAction('#3a6ea5')}>
+            {saving ? 'Saving...' : 'Save'}
+          </button>
+          <button onClick={handleModifyCancel} style={btnAction('#666')}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div style={{
       border: '1px solid #333', borderRadius: 8, padding: 10, marginBottom: 8,
       background: '#242438',
-      opacity: isDone ? 0.7 : 1,
+      opacity: isArchived ? 0.45 : isDone ? 0.7 : 1,
     }}>
       {/* Row 1: badges + title */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
@@ -269,7 +364,7 @@ function TaskCard({ task, onReload }: { task: TaskItem; onReload: () => void }) 
 
       {/* Row 2: workflow controls */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
-        {/* TODO: editable dropdowns + Start button */}
+        {/* TODO: editable dropdowns + Modify + Start buttons */}
         {isTodo && (
           <>
             <label style={{ fontSize: 11, color: '#aaa' }}>Assignee:</label>
@@ -277,6 +372,7 @@ function TaskCard({ task, onReload }: { task: TaskItem; onReload: () => void }) 
               <option value="unassigned">unassigned</option>
               <option value="gaia">Gaia</option>
               <option value="astraea">Astraea</option>
+              <option value="anyone">Anyone</option>
             </select>
             <label style={{ fontSize: 11, color: '#aaa', marginLeft: 4 }}>Priority:</label>
             <select value={task.priority} onChange={e => handlePriorityChange(e.target.value)} style={selectStyle}>
@@ -305,24 +401,53 @@ function TaskCard({ task, onReload }: { task: TaskItem; onReload: () => void }) 
           </>
         )}
 
-        {/* DONE: read-only info */}
+        {/* DONE: read-only info + archive button */}
         {isDone && (
-          <span style={{ fontSize: 11, color: '#aaa' }}>
-            Assignee: <strong style={{ color: '#eee' }}>{task.assignee}</strong>
+          <>
+            <span style={{ fontSize: 11, color: '#aaa' }}>
+              Assignee: <strong style={{ color: '#eee' }}>{task.assignee}</strong>
+            </span>
+            <button onClick={handleArchive} style={btnAction('#6c5ce7')}>
+              Archive
+            </button>
+          </>
+        )}
+
+        {/* ARCHIVED: read-only info */}
+        {isArchived && (
+          <span style={{ fontSize: 11, color: '#888', fontStyle: 'italic' }}>
+            Archived — {task.assignee}
           </span>
         )}
 
-        {/* Delete (always available) */}
-        <button
-          onClick={handleDelete}
-          style={{
-            marginLeft: 'auto', background: 'none', border: 'none',
-            color: confirmDelete ? '#e74c3c' : '#666', cursor: 'pointer',
-            fontSize: 11, fontFamily: 'monospace',
-          }}
-        >
-          {confirmDelete ? 'confirm?' : 'delete'}
-        </button>
+        {/* Modify + Delete (right-aligned, vertical) */}
+        <div style={{ marginLeft: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+          {isTodo && (
+            <button
+              onClick={() => setEditing(true)}
+              style={{
+                background: '#555', border: 'none', borderRadius: 3,
+                color: '#fff', cursor: 'pointer',
+                fontSize: 10, fontFamily: 'monospace', fontWeight: 'bold',
+                padding: '2px 8px', letterSpacing: 0.5,
+              }}
+            >
+              MODIFY
+            </button>
+          )}
+          <button
+            onClick={handleDelete}
+            style={{
+              background: 'none', border: '1px solid',
+              borderColor: confirmDelete ? '#e74c3c' : '#666', borderRadius: 3,
+              color: confirmDelete ? '#e74c3c' : '#888', cursor: 'pointer',
+              fontSize: 10, fontFamily: 'monospace', fontWeight: 'bold',
+              padding: '1px 8px', letterSpacing: 0.5,
+            }}
+          >
+            {confirmDelete ? 'CONFIRM?' : 'DELETE'}
+          </button>
+        </div>
       </div>
 
       {/* Content (collapsible) */}
@@ -396,6 +521,7 @@ function AddTaskForm({ onCreated }: { onCreated: () => void }) {
             <option value="unassigned">unassigned</option>
             <option value="gaia">Gaia</option>
             <option value="astraea">Astraea</option>
+            <option value="anyone">Anyone</option>
           </select>
         </div>
         <div>
@@ -506,7 +632,7 @@ function AlertCard({ alert, onReload }: { alert: AlertItem; onReload: () => void
     onReload()
   }
 
-  const needsCollapse = alert.content.length > 100
+  const needsCollapse = alert.content.length > 100 || alert.content.split('\n').length > 2
 
   return (
     <div style={{

@@ -18,9 +18,10 @@ export type IndoorDecorationKind =
 // Outdoor decoration types
 export type OutdoorDecorationKind =
   | 'greenhouse1' | 'greenhouse2' | 'greenhouse3'
-  | 'weatherStation' | 'cabin'
+  | 'weatherStation' | 'cabin' | 'windTurbine'
   | 'tree1' | 'tree2' | 'bush'
   | 'cropEmpty' | 'cropGrowing' | 'cropReady'
+  | 'cropLongGrowing' | 'cropLongCovered' | 'cropLongHarvest'
 export type DecorationKind = IndoorDecorationKind | OutdoorDecorationKind
 
 export interface GridTile {

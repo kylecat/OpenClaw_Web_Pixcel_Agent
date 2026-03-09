@@ -68,4 +68,17 @@ export class EventsGateway {
   emitDashboardStale(): void {
     this.server.emit('dashboard:stale')
   }
+
+  /* ---------- Greenhouse events ---------- */
+
+  emitGreenhouseChanged(): void {
+    this.server.emit('greenhouse:changed')
+  }
+
+  /* ---------- Weather events ---------- */
+
+  /** Notify clients that forecast data has been updated */
+  emitWeatherForecastUpdated(): void {
+    this.server.emit('weather:forecastUpdated')
+  }
 }

@@ -60,7 +60,7 @@ export class DashboardService {
     // Fallback to mock if OpenClaw data not yet available
     return {
       status: 'online',
-      version: '0.1.0',
+      version: '0.2.1',
       uptime: Math.floor((Date.now() - this.startTime) / 1000),
       lastCheck: new Date().toISOString(),
     }
