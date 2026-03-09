@@ -13,3 +13,9 @@ dist/
 
 frontend/.vite/
 Screensot/
+
+# Runtime / local state (do not publish)
+backend/data/*.db
+backend/data/*.db-wal
+backend/data/*.db-shm
+backend/data/*.jsonl
