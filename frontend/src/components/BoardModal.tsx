@@ -30,6 +30,7 @@ const STATUS_COLOR: Record<string, string> = {
   todo: '#888',
   doing: '#f39c12',
   done: '#27ae60',
+  archived: '#6c5ce7',
 }
 
 const LEVEL_COLOR: Record<string, string> = {
@@ -171,7 +172,7 @@ function TaskBoardTab({ tasks, showAdd, onToggleAdd, onReload }: {
   const [filterPriority, setFilterPriority] = useState('all')
 
   const filtered = tasks.filter(t =>
-    (filterStatus === 'all' || t.status === filterStatus) &&
+    (filterStatus === 'all' ? t.status !== 'archived' : t.status === filterStatus) &&
     (filterAssignee === 'all' || t.assignee === filterAssignee) &&
     (filterPriority === 'all' || t.priority === filterPriority),
   )
@@ -185,6 +186,7 @@ function TaskBoardTab({ tasks, showAdd, onToggleAdd, onReload }: {
           <option value="todo">todo</option>
           <option value="doing">doing</option>
           <option value="done">done</option>
+          <option value="archived">archived</option>
         </select>
         <select value={filterAssignee} onChange={e => setFilterAssignee(e.target.value)} style={filterSelect}>
           <option value="all">All Assignee</option>
@@ -281,10 +283,16 @@ function TaskCard({ task, onReload }: { task: TaskItem; onReload: () => void }) 
     setEditing(false)
   }
 
+  const handleArchive = async () => {
+    await updateTask(task.id, { status: 'archived' })
+    onReload()
+  }
+
   const isTodo = task.status === 'todo'
   const isDoing = task.status === 'doing'
   const isDone = task.status === 'done'
-  const needsCollapse = task.content.length > 100
+  const isArchived = task.status === 'archived'
+  const needsCollapse = task.content.length > 100 || task.content.split('\n').length > 2
 
   if (editing) {
     return (
@@ -344,7 +352,7 @@ function TaskCard({ task, onReload }: { task: TaskItem; onReload: () => void }) 
     <div style={{
       border: '1px solid #333', borderRadius: 8, padding: 10, marginBottom: 8,
       background: '#242438',
-      opacity: isDone ? 0.7 : 1,
+      opacity: isArchived ? 0.45 : isDone ? 0.7 : 1,
     }}>
       {/* Row 1: badges + title */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
@@ -393,10 +401,22 @@ function TaskCard({ task, onReload }: { task: TaskItem; onReload: () => void }) 
           </>
         )}
 
-        {/* DONE: read-only info */}
+        {/* DONE: read-only info + archive button */}
         {isDone && (
-          <span style={{ fontSize: 11, color: '#aaa' }}>
-            Assignee: <strong style={{ color: '#eee' }}>{task.assignee}</strong>
+          <>
+            <span style={{ fontSize: 11, color: '#aaa' }}>
+              Assignee: <strong style={{ color: '#eee' }}>{task.assignee}</strong>
+            </span>
+            <button onClick={handleArchive} style={btnAction('#6c5ce7')}>
+              Archive
+            </button>
+          </>
+        )}
+
+        {/* ARCHIVED: read-only info */}
+        {isArchived && (
+          <span style={{ fontSize: 11, color: '#888', fontStyle: 'italic' }}>
+            Archived — {task.assignee}
           </span>
         )}
 
@@ -612,7 +632,7 @@ function AlertCard({ alert, onReload }: { alert: AlertItem; onReload: () => void
     onReload()
   }
 
-  const needsCollapse = alert.content.length > 100
+  const needsCollapse = alert.content.length > 100 || alert.content.split('\n').length > 2
 
   return (
     <div style={{
