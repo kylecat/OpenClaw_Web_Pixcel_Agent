@@ -1,6 +1,6 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common'
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common'
 import { GreenhouseService } from './greenhouse.service.js'
-import type { PlantEntry } from './greenhouse.service.js'
+import type { PlantEntry, LogEntry } from './greenhouse.service.js'
 import type { CreatePlantDto } from './dto/create-plant.dto.js'
 import type { UpdatePlantDto } from './dto/update-plant.dto.js'
 import { EventsGateway } from '../events/events.gateway.js'
@@ -13,8 +13,8 @@ export class GreenhouseController {
   ) {}
 
   @Get()
-  findAll(): Promise<PlantEntry[]> {
-    return this.greenhouse.findAll()
+  findAll(@Query('house') house?: string): Promise<PlantEntry[]> {
+    return this.greenhouse.findAll(house != null ? Number(house) : undefined)
   }
 
   @Post()
@@ -23,6 +23,28 @@ export class GreenhouseController {
     this.events.emitGreenhouseChanged()
     return entry
   }
+
+  /* ---------- Cultivation Logs (before :id routes) ---------- */
+
+  @Get('logs')
+  findLogs(@Query('house') house: string): Promise<LogEntry[]> {
+    return this.greenhouse.findLogs(Number(house) || 0)
+  }
+
+  @Post('logs')
+  async createLog(@Body() body: { house: number; content: string }): Promise<LogEntry> {
+    const entry = await this.greenhouse.createLog(body.house, body.content)
+    this.events.emitGreenhouseChanged()
+    return entry
+  }
+
+  @Delete('logs/:id')
+  async removeLog(@Param('id') id: string): Promise<void> {
+    await this.greenhouse.removeLog(id)
+    this.events.emitGreenhouseChanged()
+  }
+
+  /* ---------- Plant CRUD (param routes last) ---------- */
 
   @Patch(':id')
   async update(

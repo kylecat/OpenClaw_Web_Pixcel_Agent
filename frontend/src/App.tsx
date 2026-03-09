@@ -4,6 +4,8 @@ import { SceneCanvas } from './components/SceneCanvas'
 import { BoardModal } from './components/BoardModal'
 import { DashboardModal } from './components/DashboardModal'
 import { ShelfModal } from './components/ShelfModal'
+import { WeatherPanel } from './components/WeatherPanel'
+import { GreenhousePanel } from './components/GreenhousePanel'
 import type { Agent, AgentRpgData } from './components/AgentCard'
 import type { SceneCanvasHandle, WalkTarget } from './components/SceneCanvas'
 import type { SelectedObject } from './scene/types'
@@ -68,6 +70,11 @@ function App() {
   const [boardOpen, setBoardOpen] = useState(false)
   // Dashboard modal
   const [dashboardOpen, setDashboardOpen] = useState(false)
+  // Weather modal
+  const [weatherOpen, setWeatherOpen] = useState(false)
+  // Greenhouse modal
+  const [greenhouseOpen, setGreenhouseOpen] = useState(false)
+  const [greenhouseIndex, setGreenhouseIndex] = useState(0)
   // Shelf modal
   const [shelfOpen, setShelfOpen] = useState(false)
   const [shelfId, setShelfId] = useState<'shelf1' | 'shelf2' | 'shelf3'>('shelf1')
@@ -97,6 +104,13 @@ function App() {
     }
     if (obj?.kind === 'dashboard') {
       setDashboardOpen(true)
+    }
+    if (obj?.kind === 'weatherStation') {
+      setWeatherOpen(true)
+    }
+    if (obj?.kind === 'greenhouse') {
+      setGreenhouseIndex(obj.index)
+      setGreenhouseOpen(true)
     }
     // Indoor exit/portal -> move selected agent to outdoor + switch view
     if (obj?.kind === 'exitDoor' || obj?.kind === 'portal') {
@@ -425,6 +439,10 @@ function App() {
       <BoardModal open={boardOpen} onClose={closeBoardModal} boardVersion={boardVersion} />
       {/* Dashboard Modal */}
       <DashboardModal open={dashboardOpen} onClose={closeDashboardModal} socket={socket} />
+      {/* Weather Panel */}
+      <WeatherPanel open={weatherOpen} onClose={() => setWeatherOpen(false)} />
+      {/* Greenhouse Panel */}
+      <GreenhousePanel open={greenhouseOpen} onClose={() => setGreenhouseOpen(false)} greenhouseIndex={greenhouseIndex} socket={socket} />
       {/* Shelf Modal */}
       <ShelfModal open={shelfOpen} onClose={() => setShelfOpen(false)} shelfId={shelfId} />
     </div>

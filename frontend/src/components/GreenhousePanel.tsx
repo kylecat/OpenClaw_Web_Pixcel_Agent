@@ -8,12 +8,20 @@ type PlantStage = 'seed' | 'sprout' | 'growing' | 'harvest'
 
 interface PlantEntry {
   id: string
+  house: number
   plantType: string
   stage: PlantStage
   plantedDate: string
   expectedHarvest: string
   notes: string
   references: string[]
+}
+
+interface LogEntry {
+  id: string
+  house: number
+  timestamp: string
+  content: string
 }
 
 interface GreenhousePanelProps {
@@ -25,7 +33,7 @@ interface GreenhousePanelProps {
   socket: { on: (ev: string, fn: (...args: any[]) => void) => void; off: (ev: string, fn: (...args: any[]) => void) => void }
 }
 
-type Tab = 'plants' | 'references'
+type ContentTab = 'plants' | 'references' | 'log'
 
 /* ================================================================== */
 /*  Stage helpers                                                      */
@@ -55,6 +63,7 @@ const STAGE_ICON: Record<PlantStage, string> = {
 }
 
 const GREENHOUSE_NAMES = ['Greenhouse A', 'Greenhouse B', 'Greenhouse C']
+const GREENHOUSE_COLORS = ['#43a047', '#2196f3', '#ff9800']
 
 /* ================================================================== */
 /*  Stage Progress Bar                                                 */
@@ -91,7 +100,8 @@ function StageProgress({ stage }: { stage: PlantStage }) {
 /*  Add Plant Form                                                     */
 /* ================================================================== */
 
-function AddPlantForm({ onSubmit, onCancel }: {
+function AddPlantForm({ house, onSubmit, onCancel }: {
+  house: number
   onSubmit: (data: Omit<PlantEntry, 'id'>) => void
   onCancel: () => void
 }) {
@@ -108,6 +118,7 @@ function AddPlantForm({ onSubmit, onCancel }: {
     if (!plantType.trim()) return
     const refs = refInput.split('\n').map(r => r.trim()).filter(Boolean)
     onSubmit({
+      house,
       plantType: plantType.trim(),
       stage,
       plantedDate,
@@ -225,33 +236,52 @@ function PlantCard({ plant, onUpdate }: {
 /* ================================================================== */
 
 export function GreenhousePanel({ open, onClose, greenhouseIndex, socket }: GreenhousePanelProps) {
-  const [tab, setTab] = useState<Tab>('plants')
+  const [activeHouse, setActiveHouse] = useState(greenhouseIndex)
+  const [contentTab, setContentTab] = useState<ContentTab>('plants')
   const [plants, setPlants] = useState<PlantEntry[]>([])
+  const [logs, setLogs] = useState<LogEntry[]>([])
   const [loading, setLoading] = useState(false)
   const [showAddForm, setShowAddForm] = useState(false)
+  const [logInput, setLogInput] = useState('')
 
-  const fetchPlants = useCallback(async () => {
+  // Sync active house when clicking different greenhouse in scene
+  useEffect(() => {
+    if (open) setActiveHouse(greenhouseIndex)
+  }, [open, greenhouseIndex])
+
+  const fetchPlants = useCallback(async (house: number) => {
     setLoading(true)
     try {
-      const res = await fetch('/api/greenhouse')
+      const res = await fetch(`/api/greenhouse?house=${house}`)
       if (res.ok) setPlants(await res.json())
     } catch { /* ignore */ }
     finally { setLoading(false) }
   }, [])
 
+  const fetchLogs = useCallback(async (house: number) => {
+    try {
+      const res = await fetch(`/api/greenhouse/logs?house=${house}`)
+      if (res.ok) setLogs(await res.json())
+    } catch { /* ignore */ }
+  }, [])
+
   useEffect(() => {
     if (open) {
-      fetchPlants()
+      fetchPlants(activeHouse)
+      fetchLogs(activeHouse)
       setShowAddForm(false)
     }
-  }, [open, fetchPlants])
+  }, [open, activeHouse, fetchPlants, fetchLogs])
 
   // WebSocket: re-fetch on greenhouse:changed
   useEffect(() => {
-    const onChanged = () => fetchPlants()
+    const onChanged = () => {
+      fetchPlants(activeHouse)
+      fetchLogs(activeHouse)
+    }
     socket.on('greenhouse:changed', onChanged)
     return () => { socket.off('greenhouse:changed', onChanged) }
-  }, [socket, fetchPlants])
+  }, [socket, activeHouse, fetchPlants, fetchLogs])
 
   // ESC to close
   useEffect(() => {
@@ -269,7 +299,7 @@ export function GreenhousePanel({ open, onClose, greenhouseIndex, socket }: Gree
         body: JSON.stringify(data),
       })
       if (res.ok) {
-        await fetchPlants()
+        await fetchPlants(activeHouse)
         setShowAddForm(false)
       }
     } catch { /* ignore */ }
@@ -282,13 +312,33 @@ export function GreenhousePanel({ open, onClose, greenhouseIndex, socket }: Gree
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(patch),
       })
-      await fetchPlants()
+      await fetchPlants(activeHouse)
+    } catch { /* ignore */ }
+  }
+
+  const handleAddLog = async () => {
+    const trimmed = logInput.trim()
+    if (!trimmed) return
+    try {
+      await fetch('/api/greenhouse/logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ house: activeHouse, content: trimmed }),
+      })
+      setLogInput('')
+      await fetchLogs(activeHouse)
+    } catch { /* ignore */ }
+  }
+
+  const handleDeleteLog = async (id: string) => {
+    try {
+      await fetch(`/api/greenhouse/logs/${id}`, { method: 'DELETE' })
+      await fetchLogs(activeHouse)
     } catch { /* ignore */ }
   }
 
   if (!open) return null
 
-  // Collect all references from all plants
   const allRefs = plants.flatMap(p => p.references.map(url => ({ plantType: p.plantType, url })))
 
   return (
@@ -312,7 +362,7 @@ export function GreenhousePanel({ open, onClose, greenhouseIndex, socket }: Gree
           padding: '12px 16px', borderBottom: '1px solid #333',
         }}>
           <span style={{ fontSize: 16, fontWeight: 'bold' }}>
-            {'\u{1F33F}'} {GREENHOUSE_NAMES[greenhouseIndex] ?? 'Greenhouse'}
+            {'\u{1F33F}'} Greenhouse
           </span>
           <button
             onClick={onClose}
@@ -323,33 +373,55 @@ export function GreenhousePanel({ open, onClose, greenhouseIndex, socket }: Gree
           >x</button>
         </div>
 
-        {/* Tabs */}
+        {/* Greenhouse tabs (A / B / C) */}
         <div style={{ display: 'flex', borderBottom: '1px solid #333' }}>
-          {(['plants', 'references'] as Tab[]).map(t => (
+          {GREENHOUSE_NAMES.map((name, i) => (
             <button
-              key={t}
-              onClick={() => setTab(t)}
+              key={i}
+              onClick={() => { setActiveHouse(i); setShowAddForm(false) }}
               style={{
                 flex: 1, padding: '8px 0', cursor: 'pointer',
-                background: 'none', color: tab === t ? '#eee' : '#888',
-                border: 'none', fontFamily: 'monospace', fontSize: 13,
-                borderBottom: tab === t ? '2px solid #43a047' : '2px solid transparent',
+                background: 'none',
+                color: activeHouse === i ? '#eee' : '#666',
+                border: 'none', fontFamily: 'monospace', fontSize: 12,
+                borderBottom: activeHouse === i
+                  ? `2px solid ${GREENHOUSE_COLORS[i]}`
+                  : '2px solid transparent',
+                fontWeight: activeHouse === i ? 'bold' : 'normal',
               }}
             >
-              {t === 'plants' ? '\u{1F331} Cultivation Data' : '\u{1F4DA} References'}
+              {STAGE_ICON.sprout} {name}
+            </button>
+          ))}
+        </div>
+
+        {/* Content tabs (Cultivation Data / References) */}
+        <div style={{ display: 'flex', borderBottom: '1px solid #2a2a3e' }}>
+          {([['plants', '\u{1F331} Cultivation'], ['log', '\u{1F4DD} Log'], ['references', '\u{1F4DA} References']] as [ContentTab, string][]).map(([t, label]) => (
+            <button
+              key={t}
+              onClick={() => setContentTab(t)}
+              style={{
+                flex: 1, padding: '6px 0', cursor: 'pointer',
+                background: 'none', color: contentTab === t ? '#ccc' : '#666',
+                border: 'none', fontFamily: 'monospace', fontSize: 11,
+                borderBottom: contentTab === t ? '1px solid #888' : '1px solid transparent',
+              }}
+            >
+              {label}
             </button>
           ))}
         </div>
 
         {/* Content */}
         <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
-          {tab === 'plants' && (
+          {contentTab === 'plants' && (
             <div style={{ padding: 16 }}>
               {loading && <div style={{ color: '#888', textAlign: 'center', padding: 24 }}>Loading...</div>}
 
               {!loading && plants.length === 0 && (
                 <div style={{ color: '#666', textAlign: 'center', padding: 24 }}>
-                  No plants yet. Click "Add Plant" to start.
+                  No plants in {GREENHOUSE_NAMES[activeHouse]}. Click "Add Plant" to start.
                 </div>
               )}
 
@@ -365,11 +437,63 @@ export function GreenhousePanel({ open, onClose, greenhouseIndex, socket }: Gree
             </div>
           )}
 
-          {tab === 'references' && (
+          {contentTab === 'log' && (
+            <div style={{ padding: 16 }}>
+              {/* New log input */}
+              <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                <textarea
+                  value={logInput}
+                  onChange={e => setLogInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAddLog() } }}
+                  placeholder="Write a cultivation log entry... (Enter to submit, Shift+Enter for newline)"
+                  rows={2}
+                  style={{
+                    ...inputStyle, flex: 1, resize: 'vertical',
+                    width: 'auto',
+                  }}
+                />
+                <button onClick={handleAddLog} style={{ ...btnPrimary, alignSelf: 'flex-end' }}>
+                  Add
+                </button>
+              </div>
+
+              {logs.length === 0 && (
+                <div style={{ color: '#666', textAlign: 'center', padding: 24 }}>
+                  No logs in {GREENHOUSE_NAMES[activeHouse]} yet.
+                </div>
+              )}
+
+              {logs.map(log => (
+                <div key={log.id} style={{
+                  background: '#16162a', border: '1px solid #333', borderRadius: 6,
+                  padding: '8px 12px', marginBottom: 6,
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                    <span style={{ fontSize: 10, color: '#888' }}>
+                      {new Date(log.timestamp).toLocaleString()}
+                    </span>
+                    <button
+                      onClick={() => handleDeleteLog(log.id)}
+                      title="Delete"
+                      style={{
+                        background: 'none', border: 'none', color: '#666',
+                        fontSize: 12, cursor: 'pointer', padding: '0 4px',
+                      }}
+                    >x</button>
+                  </div>
+                  <div style={{ fontSize: 12, color: '#ccc', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+                    {log.content}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {contentTab === 'references' && (
             <div style={{ padding: 16 }}>
               {allRefs.length === 0 && (
                 <div style={{ color: '#666', textAlign: 'center', padding: 24 }}>
-                  No references collected yet.
+                  No references in {GREENHOUSE_NAMES[activeHouse]}.
                 </div>
               )}
               {allRefs.map((r, i) => (
@@ -392,9 +516,10 @@ export function GreenhousePanel({ open, onClose, greenhouseIndex, socket }: Gree
           )}
         </div>
 
-        {/* Add form (slides in at bottom when active) */}
-        {showAddForm && tab === 'plants' && (
+        {/* Add form */}
+        {showAddForm && contentTab === 'plants' && (
           <AddPlantForm
+            house={activeHouse}
             onSubmit={handleAdd}
             onCancel={() => setShowAddForm(false)}
           />
